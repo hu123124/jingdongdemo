@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.example.jingdongdemo.mapper.ProductMapper">
+
+    <select id="listProducts" resultType="com.example.jingdongdemo.entity.Product">
+        SELECT p.id, p.category_id, p.name, p.subtitle, p.main_image, p.sub_images, p.detail,
+               COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), p.price) AS price,
+               (SELECT COALESCE(SUM(s2.stock), 0) FROM t_product_sku s2 WHERE s2.product_id = p.id) AS stock,
+               p.status, p.sales, p.create_time, p.update_time
+        FROM t_product p WHERE p.status = 1
+        <if test="categoryId != null">AND p.category_id = #{categoryId}</if>
+        <if test="keyword != null and keyword != ''">AND p.name LIKE CONCAT('%', #{keyword}, '%')</if>
+        <if test="minPrice != null">AND COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), p.price) &gt;= #{minPrice}</if>
+        <if test="maxPrice != null">AND COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), p.price) &lt;= #{maxPrice}</if>
+        <choose>
+            <when test="sort == 'price_asc'">ORDER BY price ASC</when>
+            <when test="sort == 'price_desc'">ORDER BY price DESC</when>
+            <when test="sort == 'sales_desc'">ORDER BY sales DESC</when>
+            <otherwise>ORDER BY p.create_time DESC</otherwise>
+        </choose>
+    </select>
+</mapper>

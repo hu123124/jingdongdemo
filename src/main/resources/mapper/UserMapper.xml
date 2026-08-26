@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.example.jingdongdemo.mapper.UserMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO t_user (username, password, phone, create_time, update_time)
+        VALUES (#{username}, #{password}, #{phone}, NOW(), NOW())
+    </insert>
+
+    <update id="updateInfo">
+        UPDATE t_user
+        SET nickname=#{nickname},
+            avatar=#{avatar},
+            gender=#{gender},
+            email=#{email},
+            update_time=NOW()
+        WHERE id =#{id}
+    </update>
+
+    <!-- B端 - 用户列表 -->
+    <select id="selectAll" resultType="com.example.jingdongdemo.entity.User">
+        SELECT * FROM t_user ORDER BY create_time DESC
+    </select>
+
+</mapper>

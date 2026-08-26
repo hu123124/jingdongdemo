@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.example.jingdongdemo.mapper.CartMapper">
+
+    <select id="getCarts" resultType="com.example.jingdongdemo.vo.CartVO">
+        SELECT  c.id,
+                c.product_id AS productId,
+                p.name AS productName,
+                c.sku_id AS skuId,
+                sku.spec AS skuSpec,
+                sku.image AS productImage,
+                sku.price,
+                c.quantity,
+                c.checked,
+                sku.stock
+            FROM t_cart c
+            LEFT JOIN t_product p ON p.id = c.product_id
+            LEFT JOIN t_product_sku sku ON sku.id = c.sku_id
+        WHERE user_id = #{userId}
+    </select>
+
+    <update id="updateBatchChecked">
+        UPDATE t_cart SET checked = #{checked} WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <delete id="batchDeleteCart">
+        DELETE FROM t_cart WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

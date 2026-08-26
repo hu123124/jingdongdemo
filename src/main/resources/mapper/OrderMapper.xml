@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.example.jingdongdemo.mapper.OrderMapper">
+
+    <select id="getItems" resultType="com.example.jingdongdemo.vo.OrderConfirmItemVO">
+        SELECT  c.product_id,
+                c.sku_id,
+                p.name AS productName,
+                sku.spec AS skuSpec,
+                sku.image AS productImage,
+                sku.price,
+                c.quantity,
+                sku.price * c.quantity AS subtotal
+            FROM t_cart c
+            LEFT JOIN t_product_sku sku ON sku.id = c.sku_id
+            LEFT JOIN t_product p ON p.id = c.product_id
+            WHERE c.user_id = #{userId} AND c.checked = 1;
+    </select>
+    <!--    <select id="getAvailableCoupons" resultType="com.example.jingdongdemo.vo.OrderConfirmAvailableCouponsVO">-->
+<!--        SELECT * FROM t_coupon c-->
+<!--        LEFT JOIN t_user_coupon uc ON c.-->
+<!--    </select>-->
+    <insert id="createOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO t_order (order_no,user_id,total_amount,freight,pay_amount,status,address_snapshot,remark,create_time,update_time)
+        VALUES(#{orderNo},#{userId},#{totalAmount},#{freight},#{payAmount},#{status},#{addressSnapshot},#{remark},NOW(),NOW())
+    </insert>
+    <select id="getOrderByUserIdAndStatus" resultType="com.example.jingdongdemo.entity.Order">
+        SELECT * FROM t_order WHERE user_id = #{userId}
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </select>
+</mapper>
