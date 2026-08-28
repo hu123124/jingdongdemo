@@ -1,0 +1,7 @@
+/* 通用按钮样式 */
+.btn-primary { background: #e4393c; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.btn-primary:hover { background: #c62828; }
+
+/* 通用输入框 */
+.input { padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; }
+.input:focus { border-color: #e4393c; }

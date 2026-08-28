@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>我的订单 - JDemo</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f5f5f5;}
+.nav{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:0 40px;display:flex;align-items:center;height:60px;justify-content:space-between;}
+.nav .logo{font-size:24px;font-weight:bold;color:#e4393c;text-decoration:none;}
+.nav a{color:#666;text-decoration:none;margin-left:20px;font-size:14px;}
+.container{max-width:1000px;margin:30px auto;background:#fff;border-radius:12px;padding:30px;}
+h2{margin-bottom:20px;}
+.tabs{display:flex;gap:10px;margin-bottom:20px;}
+.tab{padding:8px 18px;border:1px solid #ddd;border-radius:20px;cursor:pointer;background:#fff;font-size:14px;color:#666;}
+.tab.active{background:#e4393c;color:#fff;border-color:#e4393c;}
+.order-item{border:1px solid #eee;border-radius:10px;margin-bottom:15px;padding:16px;}
+.order-header{font-size:13px;color:#666;margin-bottom:10px;}
+.order-header .no{font-weight:bold;color:#333;margin-right:20px;}
+.order-header .status{color:#e4393c;}
+.order-footer{text-align:right;margin-top:10px;}
+.amount{font-size:18px;color:#e4393c;font-weight:bold;margin-right:16px;}
+.order-footer button{padding:8px 20px;margin-left:8px;border:1px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;}
+.btn-primary{background:#e4393c!important;color:#fff!important;border:1px solid #e4393c!important;border-radius:2px;cursor:pointer;}
+.btn-danger{background:#fff!important;color:#e4393c!important;border:1px solid #e4393c!important;border-radius:2px;cursor:pointer;font-size:13px;}
+.btn-default{background:#f5f5f5;color:#666;border:1px solid #ddd;border-radius:2px;cursor:pointer;}
+.empty{text-align:center;color:#999;padding:60px;}
+.detail-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;}
+.detail-table th{background:#fafafa;padding:8px;text-align:left;}
+.detail-table td{padding:8px;border-bottom:1px solid #eee;}
+.addr-info{background:#f9f9f9;padding:10px;border-radius:6px;margin:10px 0;font-size:13px;}
+.detail-section{border-top:2px solid #e4393c;margin-top:10px;padding-top:10px;}
+.modal-mask{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;}
+.modal-mask.show{display:flex;}
+.modal{background:#fff;border-radius:12px;width:420px;padding:30px;}
+.modal h3{margin-bottom:20px;}
+.pay-option{display:flex;align-items:center;padding:14px;border:2px solid #eee;border-radius:2px;margin-bottom:10px;cursor:pointer;font-size:16px;transition:.2s;}
+.pay-option:hover,.pay-option.sel{border-color:#e4393c;background:#fff5f5;}
+.pay-option span{font-size:24px;margin-right:12px;}
+.modal .btns{display:flex;gap:10px;margin-top:20px;}
+.modal .btns button{flex:1;padding:12px;border:none;border-radius:2px;font-size:15px;cursor:pointer;}
+.btn-confirm{background:#e4393c;color:#fff;border:none;border-radius:2px;cursor:pointer;}
+.btn-cancel{background:#fff;color:#666;border:1px solid #ddd;border-radius:2px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="nav"><a href="./index.html" class="logo">JDemo</a><div id="nav-right"><a href="./login.html">登录/注册</a></div></div>
+<div class="container"><h2>我的订单</h2>
+    <div class="tabs"><span class="tab active" onclick="filter(null,this)">全部</span><span class="tab" onclick="filter(0,this)">待付款</span><span class="tab" onclick="filter(1,this)">待发货</span><span class="tab" onclick="filter(2,this)">待收货</span><span class="tab" onclick="filter(3,this)">已完成</span><span class="tab" onclick="filter(4,this)">已取消</span></div>
+    <div id="orderList"></div>
+</div>
+<div class="toast" id="resultToast" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:2px;color:#fff;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;"></div>
+<div class="modal-mask" id="confirmModal"><div class="modal"><h3 id="confirmTitle">提示</h3><div class="confirm-btns" style="display:flex;gap:10px;margin-top:20px"><button class="btn-cancel" onclick="closeCmd()">取消</button><button class="btn-confirm" onclick="doCmd()">确定</button></div></div></div>
+<div class="modal-mask" id="payModal"><div class="modal"><h3>选择支付方式</h3>
+    <div class="pay-option sel" onclick="pickPay(this,1)"><span>&#127758;</span> 支付宝</div>
+    <div class="pay-option" onclick="pickPay(this,2)"><span>&#128172;</span> 微信支付</div>
+    <div class="pay-option" onclick="pickPay(this,3)"><span>&#128176;</span> 余额支付</div>
+    <div class="btns"><button class="btn-cancel" onclick="closePay()">取消</button><button class="btn-confirm" onclick="doPay()">确认支付</button></div>
+</div></div>
+<script>
+var ST={0:'待付款',1:'待发货',2:'待收货',3:'已完成',4:'已取消'},cs=null,PAY_NO=null,PAY_CH=1;
+async function load(){
+    if(!isLogin()){location.href='./login.html';return;}
+    var u=BASE_URL+'/api/v1/orders?pageNum=1&pageSize=20';if(cs!==null)u+='&status='+cs;
+    try{var r=await axios.get(u,{headers:{Authorization:'Bearer '+tok()}});if(r.data.code===200)render(r.data.data);}catch(e){document.getElementById('orderList').innerHTML='<div class="empty">加载失败</div>';}
+}
+function render(d){
+    if(!d||!d.list||d.list.length===0){document.getElementById('orderList').innerHTML='<div class="empty">暂无订单</div>';return;}
+    document.getElementById('orderList').innerHTML=d.list.map(function(o){var bt='';if(o.status===0){bt='<button class="btn-primary" onclick="openPay(\''+o.orderNo+'\')">去支付</button> <button class="btn-danger" onclick="cancel(\''+o.orderNo+'\')">取消订单</button>';}if(o.status===1)bt='<span style="color:#ff9800">等待发货</span>';if(o.status===2)bt='<button class="btn-primary" onclick="receive(\''+o.orderNo+'\')">确认收货</button>';if(o.status===3)bt='<span style="color:#27ae60">已完成</span>';if(o.status===4)bt='<span style="color:#999">已取消</span>';return '<div class="order-item"><div class="order-header"><span class="no" style="cursor:pointer;text-decoration:underline" onclick="detail(\''+o.orderNo+'\')">'+o.orderNo+'</span><span class="status">'+o.statusText+'</span></div><div id="detail-'+o.orderNo+'" class="detail-section" style="display:none"></div><div class="order-footer"><span class="amount">¥'+(o.payAmount?o.payAmount.toFixed(2):'0.00')+'</span>'+bt+'</div></div>';}).join('');
+}
+function openPay(no){PAY_NO=no;document.getElementById('payModal').classList.add('show');}
+function closePay(){PAY_NO=null;document.getElementById('payModal').classList.remove('show');}
+function pickPay(el,ch){document.querySelectorAll('.pay-option').forEach(function(e){e.classList.remove('sel');});el.classList.add('sel');PAY_CH=ch;}
+async function doPay(){
+    if(!PAY_NO)return;
+    try{var r=await axios.post(BASE_URL+'/api/v1/payments',{orderNo:PAY_NO,payChannel:PAY_CH},{headers:{Authorization:'Bearer '+tok()}});if(r.data.code===200){closePay();showResult('支付成功',true);load();}else{showResult(r.data.message,false);}}catch(e){showResult('支付失败',false);}
+}
+var CMD_ACT=null,CMD_NO=null;
+function showResult(msg,ok){var t=document.getElementById('resultToast');t.textContent=msg;t.style.background=ok?'#27ae60':'#e74c3c';t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2000);}
+function openConfirm(no,act,title){CMD_NO=no;CMD_ACT=act;document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmModal').classList.add('show');}
+function doCmd(){if(CMD_NO&&CMD_ACT){CMD_ACT(CMD_NO);}closeCmd();}
+function closeCmd(){CMD_NO=null;CMD_ACT=null;document.getElementById('confirmModal').classList.remove('show');}
+function filter(s,el){document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});el.classList.add('active');cs=s;load();}
+async function cancel(no){openConfirm(no,doCancel,'确定要取消该订单吗？');}
+async function doCancel(no){await axios.put(BASE_URL+'/api/v1/orders/'+no+'/cancel',{},{headers:{Authorization:'Bearer '+tok()}});load();}
+async function receive(no){openConfirm(no,doReceive,'确定已收到货物吗？');}
+async function doReceive(no){await axios.put(BASE_URL+'/api/v1/orders/'+no+'/receive',{},{headers:{Authorization:'Bearer '+tok()}});load();}
+async function detail(no){var el=document.getElementById('detail-'+no);if(el.innerHTML){el.style.display=el.style.display==='none'?'block':'none';return;}try{var r=await axios.get(BASE_URL+'/api/v1/orders/'+no,{headers:{Authorization:'Bearer '+tok()}});if(r.data.code===200){var o=r.data.data;var h='<div class="addr-info">收货人：'+(o.address?o.address.consignee:'')+' | '+((o.address?o.address.phone:''))+' | '+(o.address?o.address.fullAddress:'')+'</div>';h+='<table class="detail-table"><tr><th>商品</th><th>规格</th><th>单价</th><th>数量</th><th>小计</th></tr>';if(o.items)o.items.forEach(function(i){h+='<tr><td>'+i.productName+'</td><td>'+i.skuSpec+'</td><td>¥'+(i.price||0).toFixed(2)+'</td><td>'+i.quantity+'</td><td>¥'+(i.subtotal||0).toFixed(2)+'</td></tr>';});h+='</table><div style="text-align:right">运费：¥'+(o.freight||0).toFixed(2)+' | 实付：<b style="color:#e4393c;font-size:16px">¥'+(o.payAmount||0).toFixed(2)+'</b></div>';el.innerHTML=h;}el.style.display='block';}catch(e){}}
+document.addEventListener('DOMContentLoaded',function(){updateNav();load();});
+</script>
+
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="text-align:center;padding:12px 0;color:#999;font-size:13px;line-height:24px;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>商品目录 - JDemo Admin</title><script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script><script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Microsoft YaHei',sans-serif;background:#f0f2f5;display:flex;min-height:100vh}
+.sidebar{width:220px;background:#1a1a2e;color:#ccc;flex-shrink:0;padding-top:20px}.sidebar .logo{color:#fff;font-size:18px;font-weight:bold;padding:0 20px 20px;border-bottom:1px solid #2a2a4e;margin-bottom:10px}
+.sidebar a{display:block;padding:12px 24px;color:#aaa;text-decoration:none;font-size:14px;cursor:pointer;border-left:3px solid transparent;transition:.2s}.sidebar a:hover,.sidebar a.active{color:#fff;background:rgba(255,255,255,.05);border-left-color:#4e8ef7}
+.main{flex:1;display:flex;flex-direction:column}.topbar{background:#fff;padding:0 30px;height:56px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,.06)}.topbar h1{font-size:18px;color:#333;font-weight:normal}.topbar .user{font-size:13px;color:#666}.topbar .user a{color:#4e8ef7;cursor:pointer;margin-left:10px}
+.workspace{flex:1;display:flex;overflow:hidden}
+.tree-panel{width:320px;background:#fff;border-right:1px solid #eee;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+.tree-panel .panel-header{padding:16px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+.tree-panel .panel-header span{font-weight:bold;font-size:15px;color:#333}
+.tree-node{padding:7px 14px 7px 10px;cursor:grab;border-left:3px solid transparent;display:flex;align-items:center;font-size:13px;color:#555;transition:.15s;user-select:none;margin:1px 0}
+.tree-node:hover{background:#f5f8ff}.tree-node.active{background:#e8f0fe;border-left-color:#4e8ef7;color:#1a1a2e;font-weight:bold}
+.tree-node.dragging{opacity:.4;background:#e0e0e0}.tree-node.drag-over{border-top:2px solid #4e8ef7}
+.tree-node .name{flex:1;pointer-events:none}.tree-node .cnt{font-size:11px;color:#999;margin:0 8px;pointer-events:none}
+.tree-node .acts{display:flex;gap:2px}.tree-node .acts button{background:none;border:none;cursor:pointer;font-size:12px;color:#aaa;padding:2px 4px}.tree-node .acts button:hover{color:#4e8ef7}
+.tree-children{padding-left:20px}
+.detail-panel{flex:1;padding:20px 24px;overflow-y:auto}
+.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04);margin-bottom:16px}.card h3{font-size:15px;color:#333;margin-bottom:14px}
+.card .tb-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}th{background:#fafafa;padding:8px 10px;text-align:left;color:#666;font-weight:normal;border-bottom:2px solid #eee}td{padding:8px 10px;border-bottom:1px solid #f0f0f0;color:#333}tr:hover td{background:#fafcff}
+.badge{padding:2px 8px;border-radius:10px;font-size:12px;display:inline-block}.bg-green{background:#e6ffe6;color:#27ae60}.bg-red{background:#ffe6e6;color:#e74c3c}
+.btn{padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:12px;margin-right:4px}.btn-primary{background:#4e8ef7;color:#fff}.btn-danger{background:#fff;color:#e74c3c;border:1px solid #e74c3c}.btn-success{background:#27ae60;color:#fff}.btn-sm{padding:3px 8px;font-size:11px}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:4px;color:#fff;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s}
+.modal-mask{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:999;align-items:center;justify-content:center}.modal-mask.show{display:flex}
+.modal{background:#fff;border-radius:8px;width:480px;max-height:80vh;overflow-y:auto;padding:30px}.modal h3{font-size:17px;color:#333;margin-bottom:20px}.modal input,.modal select,.modal textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;margin-bottom:12px;outline:none}.modal input:focus,.modal select:focus,.modal textarea:focus{border-color:#4e8ef7}.modal .row{display:flex;gap:10px}.modal .row input,.modal .row select{flex:1}.modal textarea{min-height:80px;resize:vertical}
+.modal-btns{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}.modal-btns button{padding:10px 24px;border:none;border-radius:4px;cursor:pointer;font-size:14px}.btn-cancel{background:#f0f0f0;color:#666}.btn-confirm{background:#4e8ef7;color:#fff}
+.empty{text-align:center;padding:40px;color:#999}
+</style></head><body>
+<div class="sidebar"><div class="logo">JDemo Admin</div><a href="./admin-dashboard.html">数据概览</a><a class="active" href="./admin-catalog.html">商品目录</a><a href="./admin-orders.html">订单管理</a><a href="./admin-users.html">用户管理</a><a href="./admin-coupons.html">优惠券管理</a></div>
+<div class="main"><div class="topbar"><h1>商品目录</h1><div class="user"><span id="admName"></span><a onclick="admLogout()">退出</a></div></div>
+<div class="workspace">
+    <div class="tree-panel" id="treePanel"><div class="panel-header"><span>分类树（拖拽排序）</span><button class="btn btn-primary btn-sm" onclick="openCatForm(0)">+ 一级分类</button></div><div id="treeContent"></div></div>
+    <div class="detail-panel" id="detailPanel"><div class="empty" id="emptyHint">选择左侧分类查看商品</div><div id="prodContent" style="display:none"></div></div>
+</div></div>
+<div class="modal-mask" id="modal"><div class="modal" id="modalInner"></div></div><div class="toast" id="toast"></div>
+<script>
+if(!admIsLogin())location.href='./admin-login.html';
+document.getElementById('admName').textContent=localStorage.getItem('admName')||'Admin';
+function toast(msg,ok){var t=document.getElementById('toast');t.textContent=msg;t.style.background=ok?'#27ae60':'#e74c3c';t.style.opacity='1';setTimeout(function(){t.style.opacity='0';},2000);}
+function openModal(h,body){document.getElementById('modalInner').innerHTML='<h3>'+h+'</h3>'+body;document.getElementById('modal').classList.add('show');}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+var CATS=[],PRODS=[],SEL_CAT=null,DRAG_SRC=null;
+
+async function init(){try{var cr=await admApi('/api/admin/v1/categories');if(cr.code===200)CATS=cr.data||[];var pr=await admApi('/api/admin/v1/products?pageSize=500');if(pr.code===200)PRODS=pr.data.list||[];renderTree();}catch(e){}}
+function cnt(cid){return PRODS.filter(function(p){return p.categoryId===cid;}).length;}
+function kids(pid){return CATS.filter(function(c){return c.parentId===pid;});}
+
+function renderTree(){
+    var roots=CATS.filter(function(c){return c.parentId===0;});
+    var h='';
+    function nc(c,d){
+        var n=kids(c.id).length;var kc=cnt(c.id);
+        h+='<div class="tree-node'+(SEL_CAT&&SEL_CAT.id===c.id?' active':'')+'" draggable="true" data-id="'+c.id+'" data-pid="'+c.parentId+'" data-sort="'+c.sort+'" onclick="selectCat('+c.id+')" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">';
+        h+='<span class="name">'+(d>0?'└ ':'')+c.name+'</span><span class="cnt">'+kc+'件</span>';
+        h+='<span class="acts"><button onclick="event.stopPropagation();openCatForm('+c.id+')" title="编辑">✎</button><button onclick="event.stopPropagation();openCatFormChild('+c.id+')" title="添加子分类">+</button><button onclick="event.stopPropagation();delCat('+c.id+')" title="删除">×</button></span>';
+        h+='</div>';
+        var ch=kids(c.id);if(ch.length){h+='<div class="tree-children">';ch.forEach(function(x){nc(x,d+1);});h+='</div>';}
+    }
+    roots.forEach(function(r){nc(r,0);});
+    document.getElementById('treeContent').innerHTML=h||'<div class="empty" style="padding:20px">暂无分类</div>';
+}
+
+function selectCat(id){SEL_CAT=CATS.find(function(c){return c.id===id;});renderTree();showProdPanel();}
+function showProdPanel(){document.getElementById('emptyHint').style.display='none';document.getElementById('prodContent').style.display='block';
+    var list=PRODS.filter(function(p){return p.categoryId===SEL_CAT.id;});
+    var h='<div class="card"><div class="tb-top"><h3 style="margin:0;padding:0;border:none">'+SEL_CAT.name+' - 商品列表 ('+list.length+'件)</h3><button class="btn btn-primary" onclick="openProdForm()">+ 添加商品</button></div>';
+    if(list.length===0){h+='<div class="empty">暂无商品，点击上方按钮添加</div>';}else{
+        h+='<table><tr><th>ID</th><th>名称</th><th>价格</th><th>销量</th><th>状态</th><th>操作</th></tr>';
+        list.forEach(function(p){h+='<tr><td>'+p.id+'</td><td>'+p.name+'</td><td>¥'+(p.price||0).toFixed(2)+'</td><td>'+p.sales+'</td><td>'+(p.status===1?'<span class="badge bg-green">在售</span>':'<span class="badge bg-red">下架</span>')+'</td><td><button class="btn btn-sm" onclick="openProdForm('+p.id+')">编辑</button>'+(p.status===1?'<button class="btn btn-danger btn-sm" onclick="toggleProd('+p.id+',0)">下架</button>':'<button class="btn btn-success btn-sm" onclick="toggleProd('+p.id+',1)">上架</button>')+'</td></tr>';});
+        h+='</table>';}
+    h+='</div>';document.getElementById('prodContent').innerHTML=h;
+}
+
+// Product CRUD
+function openProdForm(id){
+    var p=id?PRODS.find(function(x){return x.id===id;}):null;
+    openModal(id?'编辑商品':'添加商品到「'+SEL_CAT.name+'」',
+    '<input id="prodName" placeholder="商品名称" value="'+(p?p.name:'')+'"><input id="prodSubtitle" placeholder="副标题" value="'+(p?p.subtitle||'':'')+'"><div class="row"><input id="prodPrice" placeholder="价格" type="number" step="0.01" value="'+(p?p.price:'')+'"><input id="prodStock" placeholder="库存" type="number"></div><input id="prodImage" placeholder="主图URL" value="'+(p?p.mainImage||'':'')+'"><textarea id="prodDetail" placeholder="商品详情HTML">'+(p?p.detail||'':'')+'</textarea><div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">取消</button><button class="btn-confirm" onclick="saveProd('+(id||0)+')">保存</button></div>');
+}
+async function saveProd(id){
+    var d={categoryId:SEL_CAT.id,name:document.getElementById('prodName').value.trim(),subtitle:document.getElementById('prodSubtitle').value.trim(),price:parseFloat(document.getElementById('prodPrice').value)||0,mainImage:document.getElementById('prodImage').value.trim(),detail:document.getElementById('prodDetail').value.trim()};
+    if(!d.name){toast('请填写名称',false);return;}
+    var r;if(id){r=await admApi('/api/admin/v1/products/'+id,'PUT',d);}else{r=await admApi('/api/admin/v1/products','POST',d);}
+    if(r.code===200){closeModal();toast(id?'修改成功':'添加成功',true);var pr=await admApi('/api/admin/v1/products?pageSize=500');if(pr.code===200){PRODS=pr.data.list||[];renderTree();if(SEL_CAT)showProdPanel();}}
+}
+async function toggleProd(id,st){await admApi('/api/admin/v1/products/'+id+'/status','PUT',{status:st});toast(st?'已上架':'已下架',true);var pr=await admApi('/api/admin/v1/products?pageSize=500');if(pr.code===200){PRODS=pr.data.list||[];renderTree();if(SEL_CAT)showProdPanel();}}
+
+// Category CRUD
+function openCatForm(id){
+    var c=id?CATS.find(function(x){return x.id===id;}):null;var isRoot=!id;
+    var parentOpts='<option value="0">顶级分类</option>'+CATS.filter(function(x){return x.id!==id;}).map(function(x){return '<option value="'+x.id+'"'+(c&&c.parentId===x.id?' selected':'')+'>'+x.name+'</option>';}).join('');
+    openModal(id?'编辑分类':'新增分类','<input id="catName" placeholder="分类名称" value="'+(c?c.name:'')+'"><select id="catParent">'+parentOpts+'</select><div class="row"><input id="catSort" placeholder="排序值" value="'+(c?c.sort:0)+'" type="number"><input id="catIcon" placeholder="图标URL" value="'+(c?c.icon||'':'')+'"></div><div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">取消</button><button class="btn-confirm" onclick="saveCat('+(id||0)+')">保存</button></div>');
+}
+function openCatFormChild(pid){
+    var pc=CATS.find(function(x){return x.id===pid;});
+    openModal('添加子分类到「'+pc.name+'」','<input id="catName" placeholder="分类名称"><input id="catSort" placeholder="排序值" value="0" type="number"><input id="catIcon" placeholder="图标URL"><div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">取消</button><button class="btn-confirm" onclick="saveCatChild('+pid+')">保存</button></div>');
+}
+async function saveCat(id){var d={name:document.getElementById('catName').value.trim(),parentId:parseInt(document.getElementById('catParent').value),sort:parseInt(document.getElementById('catSort').value)||0,icon:document.getElementById('catIcon').value.trim()};if(!d.name){toast('请填写名称',false);return;}var m=id?'PUT':'POST',u='/api/admin/v1/categories'+(id?'/'+id:'');await admApi(u,m,d);closeModal();toast(id?'修改成功':'新增成功',true);var cr=await admApi('/api/admin/v1/categories');if(cr.code===200)CATS=cr.data||[];renderTree();}
+async function saveCatChild(pid){var d={name:document.getElementById('catName').value.trim(),parentId:pid,sort:parseInt(document.getElementById('catSort').value)||0,icon:document.getElementById('catIcon').value.trim()};if(!d.name){toast('请填写名称',false);return;}await admApi('/api/admin/v1/categories','POST',d);closeModal();toast('新增成功',true);var cr=await admApi('/api/admin/v1/categories');if(cr.code===200)CATS=cr.data||[];renderTree();}
+async function delCat(id){if(cnt(id)>0||kids(id).length>0){toast('请先清空该分类下的商品和子分类',false);return;}await admApi('/api/admin/v1/categories/'+id,'DELETE');toast('已删除',true);SEL_CAT=null;document.getElementById('prodContent').style.display='none';document.getElementById('emptyHint').style.display='block';var cr=await admApi('/api/admin/v1/categories');if(cr.code===200)CATS=cr.data||[];renderTree();}
+
+// Drag & Drop
+function dragStart(e){DRAG_SRC=e.target.closest('.tree-node');if(!DRAG_SRC)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',DRAG_SRC.dataset.id);setTimeout(function(){DRAG_SRC.classList.add('dragging');},0);}
+function dragOver(e){e.preventDefault();var t=e.target.closest('.tree-node');if(t&&t!==DRAG_SRC){t.classList.add('drag-over');}}
+function dragLeave(e){var t=e.target.closest('.tree-node');if(t)t.classList.remove('drag-over');}
+function drop(e){e.preventDefault();var t=e.target.closest('.tree-node');if(!t||t===DRAG_SRC)return;t.classList.remove('drag-over');
+    var srcId=parseInt(DRAG_SRC.dataset.id),tgtId=parseInt(t.dataset.id);
+    var src=CATS.find(function(x){return x.id===srcId;}),tgt=CATS.find(function(x){return x.id===tgtId;});
+    if(!src||!tgt||src.id===tgt.id)return;
+    // Move under the same parent as target, swap sort order
+    var oldPid=src.parentId;src.parentId=tgt.parentId;
+    // Re-sort siblings
+    var sibs=CATS.filter(function(x){return x.parentId===src.parentId&&x.id!==src.id;}).sort(function(a,b){return a.sort-b.sort;});
+    // Insert before target
+    var newOrder=[];
+    sibs.forEach(function(s){
+        if(s.id===tgt.id){newOrder.push(src);newOrder.push(tgt);}
+        else if(s.id!==src.id){newOrder.push(s);}
+    });
+    if(newOrder.indexOf(src)<0)newOrder.push(src);
+    newOrder.forEach(function(x,i){x.sort=i;});
+    // Save
+    Promise.all(newOrder.map(function(x){return admApi('/api/admin/v1/categories/'+x.id,'PUT',{name:x.name,parentId:x.parentId,sort:x.sort,icon:x.icon||''});})).then(function(){
+        admApi('/api/admin/v1/categories').then(function(cr){if(cr.code===200)CATS=cr.data||[];renderTree();}).catch(function(){});
+    });
+    DRAG_SRC=null;
+    document.querySelectorAll('.tree-node').forEach(function(n){n.classList.remove('dragging','drag-over');});
+}
+init();
+</script>
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:8px 0;color:#999;font-size:13px;line-height:24px;background:#f0f2f5;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body></html>

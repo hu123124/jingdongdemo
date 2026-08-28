@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>领券中心 - JDemo</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f5f5f5;}
+.nav{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:0 40px;display:flex;align-items:center;height:60px;justify-content:space-between;}
+.nav a{color:#666;text-decoration:none;margin-left:20px;font-size:14px;}
+.nav .logo{font-size:24px;font-weight:bold;color:#e4393c;}
+.container{max-width:900px;margin:30px auto;padding:0 20px;}
+h2{margin-bottom:20px;}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.coupon{background:linear-gradient(135deg,#e4393c,#ff6b6b);border-radius:10px;padding:20px;color:#fff;position:relative;overflow:hidden;}
+.coupon::before{content:'';position:absolute;left:-10px;top:50%;width:20px;height:20px;background:#f5f5f5;border-radius:50%;transform:translateY(-50%);}
+.coupon::after{content:'';position:absolute;right:-10px;top:50%;width:20px;height:20px;background:#f5f5f5;border-radius:50%;transform:translateY(-50%);}
+.coupon .val{font-size:36px;font-weight:bold;}
+.coupon .val small{font-size:18px;}
+.coupon .name{font-size:15px;margin:8px 0;}
+.coupon .cond{font-size:12px;opacity:.8;}
+.coupon button{margin-top:12px;padding:6px 20px;background:rgba(255,255,255,.9);color:#e4393c;border:none;border-radius:20px;cursor:pointer;font-size:13px;font-weight:bold;}
+.coupon button:disabled{background:rgba(255,255,255,.5);color:#999;cursor:not-allowed;}
+.empty{text-align:center;color:#999;padding:60px;}
+.msg{text-align:center;padding:10px;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="nav"><a href="./index.html" class="logo">JDemo</a><div id="nav-right"><a href="./login.html">登录/注册</a></div></div>
+<div class="container">
+    <h2>领券中心</h2>
+    <div class="msg" id="msg"></div>
+    <div class="grid" id="couponList"></div>
+</div>
+<script>
+function auth(){return {headers:{Authorization:'Bearer '+tok()}};}
+
+async function load(){
+    if(!isLogin()){location.href='./login.html';return;}
+    try{var r=await axios.get(BASE_URL+'/api/v1/coupons/available',auth());if(r.data.code===200)render(r.data.data);}catch(e){}
+}
+function render(list){
+    if(!list||list.length===0){document.getElementById('couponList').innerHTML='<div class="empty">暂无可用优惠券</div>';return;}
+    var TYPES={1:'满减券',2:'折扣券',3:'无门槛券'};
+    document.getElementById('couponList').innerHTML=list.map(function(c){return '<div class="coupon"><div class="val">'+(c.type===2?(c.discountValue*10)+'折':'¥'+c.discountValue)+(c.type===2?'':'<small>起</small>')+'</div><div class="name">'+c.name+'</div><div class="cond">'+(c.minAmount>0?'满¥'+c.minAmount+'可用':'无门槛')+' | '+TYPES[c.type]+'</div><button onclick="receive('+c.id+')">立即领取</button></div>';}).join('');
+}
+async function receive(id){try{var r=await axios.post(BASE_URL+'/api/v1/coupons/'+id+'/receive',{},{headers:{Authorization:'Bearer '+tok()}});document.getElementById('msg').innerHTML=r.data.code===200?'<span style="color:#27ae60">领取成功</span>':'<span style="color:#e74c3c">'+r.data.message+'</span>';if(r.data.code===200)load();}catch(e){}}
+document.addEventListener('DOMContentLoaded',function(){updateNav();load();});
+</script>
+
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="text-align:center;padding:12px 0;color:#999;font-size:13px;line-height:24px;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body>
+</html>

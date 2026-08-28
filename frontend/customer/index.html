@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>JDemo - 仿京东电商</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei',Arial,sans-serif;background:#f5f5f5;}
+.nav{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:0 40px;display:flex;align-items:center;height:60px;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.nav .logo{font-size:24px;font-weight:bold;color:#e4393c;text-decoration:none;}
+.nav a{color:#666;text-decoration:none;margin-left:20px;font-size:14px;}
+.nav a:hover{color:#e4393c;}
+.main{display:flex;max-width:1300px;margin:20px auto;gap:20px;padding:0 20px;}
+.sidebar{width:220px;background:#fff;border-radius:8px;padding:15px;flex-shrink:0;max-height:calc(100vh - 100px);overflow-y:auto;}
+.sidebar h3{font-size:16px;color:#333;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e4393c;}
+.cat-item{padding:8px 12px;cursor:pointer;color:#555;font-size:14px;border-radius:4px;margin:2px 0;transition:.2s;}
+.cat-item:hover,.cat-item.active{background:#ffeaea;color:#e4393c;font-weight:bold;}
+.cat-children .cat-item{padding-left:24px;font-size:13px;}
+.content{flex:1;}
+.toolbar{background:#fff;padding:12px 20px;border-radius:8px;margin-bottom:15px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.toolbar input{flex:1;min-width:200px;padding:9px 14px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;}
+.toolbar input:focus{border-color:#e4393c;}
+.toolbar button{padding:9px 18px;background:#e4393c;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;}
+.sort-btn{padding:7px 14px;border:1px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;color:#666;transition:.2s;}
+.sort-btn.active{background:#e4393c;color:#fff;border-color:#e4393c;}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;}
+.card{background:#fff;border-radius:8px;overflow:hidden;cursor:pointer;transition:box-shadow .3s;}
+.card:hover{box-shadow:0 4px 20px rgba(0,0,0,0.12);}
+.card img{width:100%;height:200px;object-fit:cover;background:#f9f9f9;}
+.card .info{padding:12px;}
+.card .name{font-size:15px;color:#333;font-weight:bold;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.card .subtitle{font-size:12px;color:#999;margin-bottom:8px;}
+.card .price{font-size:20px;color:#e4393c;font-weight:bold;}
+.card .sales{font-size:12px;color:#999;margin-top:4px;}
+.pagination{display:flex;justify-content:center;gap:8px;margin-top:20px;}
+.pagination button{padding:8px 14px;border:1px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;font-size:14px;}
+.pagination button.active{background:#e4393c;color:#fff;border-color:#e4393c;}
+.pagination button:disabled{opacity:.4;cursor:not-allowed;}
+.loading{text-align:center;padding:40px;color:#999;}
+@media(max-width:1024px){.grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:768px){.grid{grid-template-columns:repeat(2,1fr);}.sidebar{display:none;}}
+</style>
+</head>
+<body>
+<div class="nav"><a href="./index.html" class="logo">JDemo</a><div id="nav-right"><a href="./login.html">登录/注册</a></div></div>
+<div class="main">
+    <div class="sidebar"><h3>全部分类</h3><div id="catTree"></div></div>
+    <div class="content">
+        <div class="toolbar">
+            <a href="javascript:sessionStorage.removeItem('idxState');location.href='./index.html'" style="font-size:13px;color:#e4393c;text-decoration:none;margin-right:4px">显示全部</a>
+            <input type="text" id="keyword" placeholder="搜索商品...">
+            <button onclick="search()">搜索</button>
+            <button class="sort-btn active" onclick="changeSort('default',this)">综合</button>
+            <button class="sort-btn" onclick="changeSort('price_asc',this)">价格↑</button>
+            <button class="sort-btn" onclick="changeSort('price_desc',this)">价格↓</button>
+            <button class="sort-btn" onclick="changeSort('sales_desc',this)">销量</button>
+        </div>
+        <div id="productGrid" class="grid"></div>
+        <div id="pagination" class="pagination"></div>
+    </div>
+</div>
+<script>
+var pageNum=1,pageSize=12,sort='default',keyword='',categoryId=null,currentCat=null;
+async function loadCategories(){
+    try{var res=await axios.get(BASE_URL+'/api/v1/categories');if(res.data.code===200){var c=document.getElementById('catTree');renderTree(res.data.data,c);}}catch(e){}
+}
+function renderTree(cats,parent){cats.forEach(function(c){var d=document.createElement('div');d.className='cat-item';d.textContent=c.name;d.onclick=function(e){e.stopPropagation();loadByCategory(c.id,d);};parent.appendChild(d);if(c.children&&c.children.length>0){var sub=document.createElement('div');sub.className='cat-children';renderTree(c.children,sub);parent.appendChild(sub);}});}
+function loadByCategory(id,el){if(currentCat)currentCat.classList.remove('active');el.classList.add('active');currentCat=el;categoryId=id;pageNum=1;loadProducts();}
+async function loadProducts(){
+    document.getElementById('productGrid').innerHTML='<div class="loading">加载中...</div>';
+    var url=BASE_URL+'/api/v1/products?pageNum='+pageNum+'&pageSize='+pageSize+'&sort='+sort;
+    if(keyword)url+='&keyword='+encodeURIComponent(keyword);
+    if(categoryId)url+='&categoryId='+categoryId;
+    try{var res=await axios.get(url);if(res.data.code===200)renderProduct(res.data.data);}catch(e){document.getElementById('productGrid').innerHTML='<div class="loading">加载失败</div>';}
+}
+function renderProduct(data){
+    if(!data||!data.list||data.list.length===0){document.getElementById('productGrid').innerHTML='<div class="loading">暂无商品</div>';document.getElementById('pagination').innerHTML='';return;}
+    document.getElementById('productGrid').innerHTML=data.list.map(function(p){return '<div class="card" onclick="saveState();location.href=\'./product.html?id='+p.id+'\'"><img src="'+(p.mainImage||'https://picsum.photos/seed/'+p.id+'/400/400')+'" alt="'+p.name+'" onerror="this.src=\'https://picsum.photos/seed/'+Math.random()+'/400/400\'"><div class="info"><div class="name">'+p.name+'</div><div class="subtitle">'+(p.subtitle||'')+'</div><div class="price">¥'+(p.price?p.price.toFixed(2):'0.00')+'起</div><div class="sales">已售 '+(p.sales||0)+'</div></div></div>';}).join('');
+    renderPage(data);
+}
+function renderPage(d){var h='',last=0;if(d.pageNum>1)h+='<button onclick="goPage('+(d.pageNum-1)+')">上一页</button>';for(var i=1;i<=d.pages;i++){if(i===1||i===d.pages||Math.abs(i-d.pageNum)<=2){if(last&&i-last>1)h+='<span style="padding:0 4px">...</span>';h+='<button class="'+(i===d.pageNum?'active':'')+'" onclick="goPage('+i+')">'+i+'</button>';last=i;}}if(d.pageNum<d.pages)h+='<button onclick="goPage('+(d.pageNum+1)+')">下一页</button>';document.getElementById('pagination').innerHTML=h;}
+function goPage(n){pageNum=n;loadProducts();window.scrollTo(0,0);}
+function changeSort(s,el){document.querySelectorAll('.sort-btn').forEach(function(b){b.classList.remove('active');});el.classList.add('active');sort=s;pageNum=1;loadProducts();}
+function search(){keyword=document.getElementById('keyword').value.trim();pageNum=1;loadProducts();}
+function saveState(){sessionStorage.setItem('idxState',JSON.stringify({pageNum:pageNum,sort:sort,keyword:keyword,categoryId:categoryId}));}
+function restoreState(){var s=sessionStorage.getItem('idxState');if(s){try{var st=JSON.parse(s);pageNum=st.pageNum||1;sort=st.sort||'default';keyword=st.keyword||'';categoryId=st.categoryId||null;document.getElementById('keyword').value=keyword;document.querySelectorAll('.sort-btn').forEach(function(b){b.classList.remove('active');if(b.textContent==='综合'&&sort==='default')b.classList.add('active');if(b.textContent==='价格↑'&&sort==='price_asc')b.classList.add('active');if(b.textContent==='价格↓'&&sort==='price_desc')b.classList.add('active');if(b.textContent==='销量'&&sort==='sales_desc')b.classList.add('active');});}catch(e){}}}
+document.addEventListener('DOMContentLoaded',function(){updateNav();restoreState();loadCategories();loadProducts();});
+</script>
+
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="text-align:center;padding:12px 0;color:#999;font-size:13px;line-height:24px;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body>
+</html>

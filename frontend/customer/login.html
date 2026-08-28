@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>登录/注册 - JDemo</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei',Arial,sans-serif;background:#f5f5f5;}
+.header{background:#e4393c;height:80px;display:flex;align-items:center;padding:0 60px;}
+.header .logo{color:#fff;font-size:30px;font-weight:bold;text-decoration:none;}
+.header .sub{color:rgba(255,255,255,.8);font-size:18px;margin-left:20px;padding-left:20px;border-left:1px solid rgba(255,255,255,.4);}
+.main{display:flex;justify-content:center;padding:40px 20px;}
+.banner{width:400px;height:380px;background:linear-gradient(135deg,#e4393c,#c62828);border-radius:12px 0 0 12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:40px;font-weight:bold;letter-spacing:4px;}
+.container{background:#fff;width:420px;padding:40px 35px;border-radius:0 12px 12px 0;box-shadow:0 2px 12px rgba(0,0,0,.08);}
+.tabs{display:flex;margin-bottom:30px;}
+.tab{flex:1;text-align:center;padding:10px 0;cursor:pointer;font-size:18px;color:#999;border-bottom:2px solid transparent;transition:.3s;}
+.tab.active{color:#e4393c;border-bottom-color:#e4393c;font-weight:bold;}
+.form{display:none;}
+.form.active{display:block;}
+.form-group{margin-bottom:20px;}
+.form-group input{width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:4px;font-size:14px;outline:none;background:#fafafa;}
+.form-group input:focus{border-color:#e4393c;background:#fff;}
+.btn{width:100%;padding:13px;background:#e4393c;color:#fff;border:none;border-radius:4px;font-size:16px;cursor:pointer;}
+.btn:hover{background:#c62828;}
+.msg{text-align:center;margin-top:12px;font-size:14px;color:#e74c3c;min-height:20px;}
+.success{color:#27ae60;}
+</style>
+</head>
+<body>
+<div class="header"><a href="./index.html" class="logo">JDemo</a><span class="sub">欢迎登录</span></div>
+<div class="main">
+    <div class="banner">JDemo</div>
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('login')">登录</div>
+            <div class="tab" onclick="switchTab('register')">注册</div>
+        </div>
+        <div id="loginForm" class="form active">
+            <div class="form-group"><input type="text" id="loginUser" placeholder="请输入用户名"></div>
+            <div class="form-group"><input type="password" id="loginPass" placeholder="请输入密码"></div>
+            <button class="btn" onclick="doLogin()">登录</button>
+            <div class="msg" id="loginMsg"></div>
+        </div>
+        <div id="registerForm" class="form">
+            <div class="form-group"><input type="text" id="regUser" placeholder="请输入用户名"></div>
+            <div class="form-group"><input type="password" id="regPass" placeholder="请输入密码"></div>
+            <div class="form-group"><input type="text" id="regPhone" placeholder="请输入手机号"></div>
+            <button class="btn" onclick="doRegister()">注册</button>
+            <div class="msg" id="regMsg"></div>
+        </div>
+    </div>
+</div>
+<script>
+function switchTab(tab){
+    document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',(tab==='login'&&i===0)||(tab==='register'&&i===1)));
+    document.getElementById('loginForm').classList.toggle('active',tab==='login');
+    document.getElementById('registerForm').classList.toggle('active',tab==='register');
+}
+async function doLogin(){
+    var u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value.trim();
+    var msg=document.getElementById('loginMsg');
+    if(!u||!p){msg.textContent='请填写完整';return;}
+    try{
+        var btn=document.querySelector('#loginForm .btn');btn.disabled=true;btn.textContent='登录中...';
+        var res=await axios.post(BASE_URL+'/api/v1/auth/login',{username:u,password:p});
+        btn.disabled=false;btn.textContent='登录';
+        if(res.data.code===200){
+            localStorage.setItem('token',res.data.data.token);
+            localStorage.setItem('username',res.data.data.username);
+            msg.className='msg success';msg.textContent='登录成功，跳转中...';
+            setTimeout(function(){location.href='./index.html';},500);
+        }else{msg.textContent=res.data.message||'用户名或密码错误';}
+    }catch(e){msg.textContent='网络错误';document.querySelector('#loginForm .btn').disabled=false;}
+}
+async function doRegister(){
+    var u=document.getElementById('regUser').value.trim(),p=document.getElementById('regPass').value.trim(),ph=document.getElementById('regPhone').value.trim();
+    var msg=document.getElementById('regMsg');
+    if(!u||!p||!ph){msg.textContent='请填写完整';return;}
+    try{
+        var btn=document.querySelector('#registerForm .btn');btn.disabled=true;btn.textContent='注册中...';
+        var res=await axios.post(BASE_URL+'/api/v1/auth/register',{username:u,password:p,phone:ph});
+        btn.disabled=false;btn.textContent='注册';
+        if(res.data.code===200){
+            msg.className='msg success';msg.textContent='注册成功，请登录';switchTab('login');
+        }else{msg.textContent=res.data.message||'注册失败';}
+    }catch(e){msg.textContent='网络错误';document.querySelector('#registerForm .btn').disabled=false;}
+}
+</script>
+
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="text-align:center;padding:12px 0;color:#999;font-size:13px;line-height:24px;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body>
+</html>

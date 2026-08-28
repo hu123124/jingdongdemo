@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>商品详情 - JDemo</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f5f5f5;}
+.nav{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:0 40px;display:flex;align-items:center;height:60px;justify-content:space-between;}
+.nav .logo{font-size:24px;font-weight:bold;color:#e4393c;text-decoration:none;}
+.nav a{color:#666;text-decoration:none;margin-left:20px;font-size:14px;}
+.container{max-width:1100px;margin:30px auto;background:#fff;border-radius:12px;padding:40px;display:flex;gap:40px;flex-wrap:wrap;}
+.images{flex:1;min-width:350px;}
+.images .main{width:100%;border-radius:8px;object-fit:cover;min-height:350px;background:#f9f9f9;}
+.info{flex:1;min-width:300px;}
+.name{font-size:24px;font-weight:bold;color:#333;margin-bottom:10px;}
+.subtitle{color:#999;margin-bottom:20px;}
+.price-box{background:#fff5f5;padding:20px;border-radius:8px;margin-bottom:20px;}
+.price-box .label{font-size:13px;color:#999;}
+.price-box .price{font-size:30px;color:#e4393c;font-weight:bold;}
+.price-box .stock{font-size:13px;color:#999;margin-top:6px;}
+.skus{margin-bottom:20px;}
+.skus .title{font-weight:bold;margin-bottom:10px;}
+.sku-btn{padding:8px 16px;border:1px solid #ddd;border-radius:6px;margin:0 6px 6px 0;cursor:pointer;background:#fff;font-size:13px;display:inline-block;transition:.2s;}
+.sku-btn.active{border-color:#e4393c;color:#e4393c;background:#ffeaea;}
+.actions{display:flex;gap:12px;align-items:center;margin-top:20px;}
+.actions input{width:60px;padding:10px;border:1px solid #ddd;border-radius:6px;text-align:center;font-size:15px;}
+.actions button{padding:12px 30px;border:none;border-radius:6px;font-size:15px;cursor:pointer;}
+.btn-cart{background:#ff9800;color:#fff;}
+.btn-buy{background:#e4393c;color:#fff;}
+.msg{margin-top:12px;font-size:14px;}
+.msg.error{color:#e74c3c;}
+.msg.success{color:#27ae60;}
+</style>
+</head>
+<body>
+<div class="nav"><a href="javascript:history.back()" style="font-size:20px;margin-right:16px;text-decoration:none">← 返回</a><a href="./index.html" class="logo">JDemo</a><div id="nav-right"><a href="./login.html">登录/注册</a></div></div>
+<div class="container" id="detail"><div style="padding:60px;text-align:center;">加载中...</div></div>
+<script>
+var id=new URLSearchParams(location.search).get('id');
+var product=null,selSku=null;
+
+async function load(){
+    try{var r=await axios.get(BASE_URL+'/api/v1/products/'+id);if(r.data.code===200){product=r.data.data;render(product);}}catch(e){}
+}
+function render(p){
+    if(p.skus&&p.skus.length>0)selSku=p.skus[0];
+    var skuHtml='';
+    if(p.skus&&p.skus.length>0){
+        skuHtml='<div class="skus"><div class="title">规格</div>';
+        p.skus.forEach(function(s,i){
+            skuHtml+='<span class="sku-btn'+(i===0?' active':'')+'" onclick="pickSku('+i+')" data-idx="'+i+'">'+s.spec+' ¥'+s.price+' (库存:'+s.stock+')</span>';
+        });
+        skuHtml+='</div>';
+    }
+    var price=selSku?selSku.price:p.price;
+    var stock=selSku?selSku.stock:p.stock;
+    var img=p.mainImage||'https://picsum.photos/seed/'+p.id+'/500/500';
+    document.getElementById('detail').innerHTML=
+        '<div class="images"><img class="main" src="'+img+'" onerror="this.src=\'https://picsum.photos/seed/'+Math.random()+'/500/500\'"></div>'+
+        '<div class="info"><div class="name">'+p.name+'</div><div class="subtitle">'+(p.subtitle||'')+'</div>'+
+        '<div class="price-box"><div class="label">价格</div><div class="price" id="curPrice">¥'+(price||0).toFixed(2)+'</div><div class="stock" id="curStock">库存：'+(stock||0)+'</div></div>'+
+        skuHtml+
+        '<div class="actions"><input type="number" id="qty" value="1" min="1" max="'+(stock||99)+'">'+
+        '<button class="btn-cart" onclick="addCart()">加入购物车</button></div>'+
+        '<div class="msg" id="msg"></div></div>';
+}
+function pickSku(idx){
+    document.querySelectorAll('.sku-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelector('.sku-btn[data-idx="'+idx+'"]').classList.add('active');
+    selSku=product.skus[idx];
+    document.getElementById('curPrice').textContent='¥'+(selSku.price||0).toFixed(2);
+    document.getElementById('curStock').textContent='库存：'+(selSku.stock||0);
+    document.getElementById('qty').max=selSku.stock;
+}
+async function addCart(){
+    if(!isLogin()){location.href='./login.html';return;}
+    var q=parseInt(document.getElementById('qty').value)||1;
+    var sid=selSku?selSku.id:(product.skus&&product.skus.length>0?product.skus[0].id:null);
+    if(!sid){document.getElementById('msg').className='msg error';document.getElementById('msg').textContent='无可用SKU';return;}
+    try{var r=await axios.post(BASE_URL+'/api/v1/cart',{productId:parseInt(id),skuId:sid,quantity:q},{headers:{Authorization:'Bearer '+tok()}});var m=document.getElementById('msg');if(r.data.code===200){m.className='msg success';m.textContent='已加入购物车';}else{m.className='msg error';m.textContent=r.data.message;}}catch(e){document.getElementById('msg').className='msg error';document.getElementById('msg').textContent='加入失败';}
+}
+document.addEventListener('DOMContentLoaded',function(){updateNav();load();});
+</script>
+
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="text-align:center;padding:12px 0;color:#999;font-size:13px;line-height:24px;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body>
+</html>

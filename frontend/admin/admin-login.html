@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>JDemo 管理后台 - 登录</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei',sans-serif;background:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.box{background:#fff;width:400px;padding:50px 40px;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.3);}
+.box h2{text-align:center;color:#1a1a2e;margin-bottom:8px;font-size:24px;}
+.box .sub{text-align:center;color:#999;font-size:13px;margin-bottom:30px;}
+.box input{width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:4px;font-size:14px;margin-bottom:16px;outline:none;transition:border .2s;}
+.box input:focus{border-color:#4e8ef7;}
+.box button{width:100%;padding:13px;background:#4e8ef7;color:#fff;border:none;border-radius:4px;font-size:15px;cursor:pointer;}
+.box button:hover{background:#3a7de6;}
+.msg{text-align:center;margin-top:12px;font-size:13px;color:#e74c3c;min-height:18px;}
+</style>
+</head>
+<body>
+<div class="box">
+    <h2>JDemo Admin</h2>
+    <div class="sub">管理后台</div>
+    <input type="text" id="admUser" placeholder="用户名"><input type="password" id="admPass" placeholder="密码">
+    <button onclick="login()">登 录</button><div class="msg" id="msg"></div>
+</div>
+<script src="../js/common.js"></script>
+<script>
+async function login(){
+    var u=document.getElementById('admUser').value.trim(),p=document.getElementById('admPass').value.trim();
+    if(!u||!p)return;
+    try{var r=await fetch(BASE_URL+'/api/admin/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})}).then(function(r){return r.json();});
+        if(r.code===200){localStorage.setItem('admToken',r.data.token);localStorage.setItem('admName',r.data.realName||r.data.username);location.href='./admin-dashboard.html';}
+        else{document.getElementById('msg').textContent=r.message;}
+    }catch(e){document.getElementById('msg').textContent='网络错误';}
+}
+</script>
+
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:10px 0;color:#999;font-size:13px;line-height:24px;background:#1a1a2e;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body>
+</html>

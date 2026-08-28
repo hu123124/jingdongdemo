@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>订单管理 - JDemo Admin</title><script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script><script src="../js/common.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Microsoft YaHei',sans-serif;background:#f0f2f5;display:flex;min-height:100vh}
+.sidebar{width:220px;background:#1a1a2e;color:#ccc;flex-shrink:0;padding-top:20px}.sidebar .logo{color:#fff;font-size:18px;font-weight:bold;padding:0 20px 20px;border-bottom:1px solid #2a2a4e;margin-bottom:10px}
+.sidebar a{display:block;padding:12px 24px;color:#aaa;text-decoration:none;font-size:14px;cursor:pointer;border-left:3px solid transparent;transition:.2s}.sidebar a:hover,.sidebar a.active{color:#fff;background:rgba(255,255,255,.05);border-left-color:#4e8ef7}
+.main{flex:1;display:flex;flex-direction:column}.topbar{background:#fff;padding:0 30px;height:56px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,.06)}.topbar h1{font-size:18px;color:#333;font-weight:normal}.topbar .user{font-size:13px;color:#666}.topbar .user a{color:#4e8ef7;cursor:pointer;margin-left:10px}
+.content{padding:24px 30px;flex:1;overflow-y:auto}.card{background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.04)}.card h3{font-size:16px;color:#333;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f0f0f0}
+table{width:100%;border-collapse:collapse;font-size:13px}th{background:#fafafa;padding:10px 12px;text-align:left;color:#666;font-weight:normal;border-bottom:2px solid #eee}td{padding:10px 12px;border-bottom:1px solid #f0f0f0;color:#333}tr:hover td{background:#fafcff}
+.btn{padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:12px;margin-right:4px}.btn-primary{background:#4e8ef7;color:#fff}
+.pagination{display:flex;gap:6px;justify-content:center;margin-top:16px}.pagination button{padding:6px 12px;border:1px solid #ddd;background:#fff;border-radius:4px;cursor:pointer;font-size:12px}.pagination button.active{background:#4e8ef7;color:#fff;border-color:#4e8ef7}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:4px;color:#fff;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s}
+.modal-mask{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:999;align-items:center;justify-content:center}.modal-mask.show{display:flex}
+.modal{background:#fff;border-radius:8px;width:460px;padding:30px}.modal h3{font-size:17px;color:#333;margin-bottom:20px}.modal input{width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;margin-bottom:12px;outline:none}.modal input:focus{border-color:#4e8ef7}
+.modal-btns{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}.modal-btns button{padding:10px 24px;border:none;border-radius:4px;cursor:pointer;font-size:14px}.btn-cancel{background:#f0f0f0;color:#666}.btn-confirm{background:#4e8ef7;color:#fff}
+</style></head><body>
+<div class="sidebar"><div class="logo">JDemo Admin</div><a href="./admin-dashboard.html">数据概览</a><a href="./admin-catalog.html">商品目录</a><a class="active" href="./admin-orders.html">订单管理</a><a href="./admin-users.html">用户管理</a><a href="./admin-coupons.html">优惠券管理</a></div>
+<div class="main"><div class="topbar"><h1>订单管理</h1><div class="user"><span id="admName"></span><a onclick="admLogout()">退出</a></div></div><div class="content" id="tabContent"></div></div>
+<div class="modal-mask" id="modal"><div class="modal" id="modalInner"></div></div><div class="toast" id="toast"></div>
+<script>
+if(!admIsLogin())location.href='./admin-login.html';
+document.getElementById('admName').textContent=localStorage.getItem('admName')||'Admin';
+function toast(msg,ok){var t=document.getElementById('toast');t.textContent=msg;t.style.background=ok?'#27ae60':'#e74c3c';t.style.opacity='1';setTimeout(function(){t.style.opacity='0';},2000);}
+function openModal(h,body){document.getElementById('modalInner').innerHTML='<h3>'+h+'</h3>'+body;document.getElementById('modal').classList.add('show');}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+var OP=1,OS=null;
+function load(p,s){if(p)OP=p;if(s!==undefined)OS=s;var u='/api/admin/v1/orders?pageNum='+OP+'&pageSize=15';if(OS!==null)u+='&status='+OS;
+    admApi(u).then(function(r){if(r.code===200){var d=r.data,h='<div class="card"><h3>订单列表</h3><div style="margin-bottom:12px">';
+        h+='<button class="btn '+(OS===null?'btn-primary':'')+'" onclick="load(1,null)">全部</button>';
+        [{s:0,t:'待付款'},{s:1,t:'待发货'},{s:2,t:'待收货'},{s:3,t:'已完成'},{s:4,t:'已取消'}].forEach(function(x){h+='<button class="btn '+(OS===x.s?'btn-primary':'')+'" onclick="load(1,'+x.s+')">'+x.t+'</button>';});
+        h+='</div><table><tr><th>订单号</th><th>金额</th><th>状态</th><th>时间</th><th>操作</th></tr>';
+        d.list.forEach(function(o){var bt='';if(o.status===1)bt='<button class="btn btn-primary" onclick="shipModal(\''+o.orderNo+'\')">发货</button>';h+='<tr><td style="font-family:monospace">'+o.orderNo+'</td><td>¥'+(o.payAmount||0).toFixed(2)+'</td><td>'+o.statusText+'</td><td>'+fmt(o.createTime)+'</td><td>'+bt+'</td></tr>';});
+        h+='</table><div class="pagination">';for(var i=1;i<=d.pages;i++)h+='<button class="'+(i===d.pageNum?'active':'')+'" onclick="load('+i+')">'+i+'</button>';h+='</div></div>';document.getElementById('tabContent').innerHTML=h;}});}
+function fmt(t){if(!t)return'';return t.replace('T',' ').substring(0,19);}
+function shipModal(no){openModal('确认发货 - '+no,'<p style="margin-bottom:12px;color:#666;font-size:13px">填写物流信息</p><input id="shipComp" placeholder="物流公司（如顺丰速运）"><input id="shipNo" placeholder="物流单号"><div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">取消</button><button class="btn-confirm" onclick="doShip(\''+no+'\')">确认发货</button></div>');}
+function doShip(no){var c=document.getElementById('shipComp').value.trim(),n=document.getElementById('shipNo').value.trim();if(!c||!n){toast('请填写完整',false);return;}admApi('/api/admin/v1/orders/'+no+'/ship','PUT',{logisticsNo:n,logisticsCompany:c});closeModal();toast('发货成功',true);setTimeout(load,500);}
+load();
+</script>
+<!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
+<div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:8px 0;color:#999;font-size:13px;line-height:24px;background:#f0f2f5;">
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+</div>
+</body></html>
