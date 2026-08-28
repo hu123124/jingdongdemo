@@ -1,0 +1,127 @@
+# ============================================================
+# JDemo 全自动部署流水线（GitHub Actions）
+#
+# 触发方式：push 到 main 分支自动部署；也可在 Actions 页手动点 Run workflow
+# 流程：编译后端 jar → 同步前端静态文件 → 上传 jar → 重建后端容器 → 健康检查
+#
+# 需要的 GitHub Secrets（仓库 Settings → Secrets and variables → Actions → New repository secret）：
+#   SSH_HOST   服务器 IP，如 8.138.246.96
+#   SSH_USER   登录用户名，如 root
+#   SSH_PASS   服务器 root 密码
+#   DEPLOY_DIR 服务器上 docker-compose.yml 所在目录，如 /root/jd-deploy
+# ============================================================
+name: Deploy JDemo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一时间只允许一个部署在跑，避免互相覆盖
+concurrency:
+  group: jdemo-deploy
+  cancel-in-progress: true
+
+jobs:
+  # ========== ① 编译后端 ==========
+  build:
+    name: ① 编译后端 jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Maven 打包（跳过测试）
+        run: mvn -B -DskipTests package
+
+      - name: 上传 jar 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/*.jar
+
+  # ========== ② 部署到服务器 ==========
+  deploy:
+    name: ② 部署到阿里云服务器
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码（含前端静态文件）
+        uses: actions/checkout@v4
+
+      - name: 下载 jar 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: ./artifact
+
+      # 前端：仓库 frontend/customer → 服务器 /usr/local/nginx/html/jd/customer
+      - name: 同步前端 C端 → customer
+        uses: appleboy/scp-action@v0.1.9
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          source: "frontend/customer/*"
+          target: "/usr/local/nginx/html/jd/customer"
+
+      # 前端：仓库 frontend/admin → 服务器 /usr/local/nginx/html/jd/admin
+      - name: 同步前端 B端 → admin
+        uses: appleboy/scp-action@v0.1.9
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          source: "frontend/admin/*"
+          target: "/usr/local/nginx/html/jd/admin"
+
+      # 前端：css / js 直接覆盖到 jd 根目录
+      - name: 同步前端 css / js
+        uses: appleboy/scp-action@v0.1.9
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          source: "frontend/css/*,frontend/js/*"
+          target: "/usr/local/nginx/html/jd"
+
+      # 后端：jar 上传到服务器 deploy 目录（与 Dockerfile 同目录）
+      - name: 上传后端 jar
+        uses: appleboy/scp-action@v0.1.9
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          source: "artifact/*.jar"
+          target: "${{ secrets.DEPLOY_DIR }}"
+
+      # 后端：用新 jar 重建容器
+      - name: 重建后端容器
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          script: |
+            cd "${{ secrets.DEPLOY_DIR }}"
+            docker compose up -d --build
+
+      # 健康检查：网站能访问 + ICP 备案号在源码里
+      - name: 健康检查（验证网站与备案号）
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          script: |
+            sleep 3
+            curl -fsS https://jdemotoc.devbug.icu/customer/index.html | grep -qi beian \
+              && echo "✅ 网站正常，ICP备案号已生效" \
+              || (echo "❌ 健康检查失败，请检查部署"; exit 1)
