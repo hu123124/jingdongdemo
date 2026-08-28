@@ -28,7 +28,7 @@ public interface OrderMapper {
     @Select("select * from t_order where order_no = #{orderNo}")
     Order getByNo(String orderNo);
 
-    @Update("update t_order set status = 4,close_time = NOW(),update_time = NOW() where order_No = #{orderNo}")
+    @Update("update t_order set status = 4,close_time = NOW(),update_time = NOW() where order_No = #{orderNo} and status = 0")
     void cancelOrder(String orderNo);
 
     @Update("update t_order set status = 3,receive_time = NOW(),update_time = NOW() where order_No = #{orderNo}")
@@ -37,10 +37,6 @@ public interface OrderMapper {
     @Update("UPDATE t_order SET status = 1, pay_time = NOW(), update_time = NOW() WHERE order_no = #{orderNo}")
     void paySuccess(@Param("orderNo") String orderNo);
 
-    @Select("<script>SELECT * FROM t_order WHERE 1=1" +
-            "<if test='status != null'> AND status = #{status}</if>" +
-            "<if test='orderNo != null'> AND order_no = #{orderNo}</if>" +
-            "ORDER BY create_time DESC</script>")
     List<Order> adminList(@Param("status") Integer status, @Param("orderNo") String orderNo);
 
     @Update("UPDATE t_order SET status = 2, ship_time = NOW(), update_time = NOW() WHERE order_no = #{orderNo}")
