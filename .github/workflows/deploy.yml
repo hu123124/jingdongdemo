@@ -64,7 +64,7 @@ jobs:
 
       # 前端：仓库 frontend/customer → 服务器 /usr/local/nginx/html/jd/customer
       - name: 同步前端 C端 → customer
-        uses: appleboy/scp-action@v0.1.9
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -74,7 +74,7 @@ jobs:
 
       # 前端：仓库 frontend/admin → 服务器 /usr/local/nginx/html/jd/admin
       - name: 同步前端 B端 → admin
-        uses: appleboy/scp-action@v0.1.9
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -84,7 +84,7 @@ jobs:
 
       # 前端：css / js 直接覆盖到 jd 根目录
       - name: 同步前端 css / js
-        uses: appleboy/scp-action@v0.1.9
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -94,7 +94,7 @@ jobs:
 
       # 后端：jar 上传到服务器 deploy 目录（与 Dockerfile 同目录）
       - name: 上传后端 jar
-        uses: appleboy/scp-action@v0.1.9
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -104,7 +104,7 @@ jobs:
 
       # 后端：用新 jar 重建容器
       - name: 重建后端容器
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -115,7 +115,7 @@ jobs:
 
       # 健康检查：网站能访问 + ICP 备案号在源码里
       - name: 健康检查（验证网站与备案号）
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
