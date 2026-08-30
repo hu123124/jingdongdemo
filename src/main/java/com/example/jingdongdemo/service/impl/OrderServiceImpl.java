@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 
@@ -72,6 +73,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderVO createOrder(OrderRequest orderRequest) {
 
+        String lockValue = UUID.randomUUID().toString();   // 每个请求唯一，防止误删别人的锁
+
         String orderNo = "OD"+ IdUtil.getSnowflakeNextId();
 
         Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -81,7 +84,8 @@ public class OrderServiceImpl implements OrderService {
             String lockKey = "lock:sku:"+item.getSkuId();
             //尝试获取锁
             Boolean locked = redisTemplate.opsForValue()
-                    .setIfAbsent(lockKey, String.valueOf(userId), 5, TimeUnit.SECONDS);
+            // 原：.setIfAbsent(lockKey, String.valueOf(userId), 5, TimeUnit.SECONDS);
+                    .setIfAbsent(lockKey, lockValue, 5, TimeUnit.SECONDS);
             if (Boolean.FALSE.equals(locked)){
                 throw new RuntimeException("系统繁忙，请稍后重试");
             }
@@ -97,7 +101,7 @@ public class OrderServiceImpl implements OrderService {
                 redisTemplate.execute(
                         new DefaultRedisScript<>(script,Long.class),
                         Collections.singletonList(lockKey),
-                        String.valueOf(userId)
+                        lockValue
                 );
             }
         }
