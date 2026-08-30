@@ -60,7 +60,11 @@ th{color:#999;background:#fafafa;}
 <div class="modal-mask" id="confirmModal"><div class="modal"><h3>提示</h3><p style="margin:10px 0">确定要删除该商品吗？</p><div class="confirm-btns"><button class="btn-cancel" onclick="closeConfirm()">取消</button><button class="btn-save" onclick="doDel()">确定删除</button></div></div></div>
 <div class="modal-mask" id="addrModal"><div class="modal"><h3>新增收货地址</h3><input type="text" id="aConsignee" placeholder="收货人姓名"><input type="text" id="aPhone" placeholder="手机号码"><div class="row"><input type="text" id="aProvince" placeholder="省"><input type="text" id="aCity" placeholder="市"><input type="text" id="aDistrict" placeholder="区/县"></div><input type="text" id="aDetail" placeholder="详细地址（街道门牌号）"><div class="btns"><button class="btn-cancel" onclick="closeAddr()">取消</button><button class="btn-save" onclick="saveAddr()">保存</button></div></div></div>
 <script>
-var ADDRS=[],SELECTED=null,COUPONS=[],USE_COUPON=null;
+var ADDRS=[],SELECTED=null,COUPONS=[],USE_COUPON=null;   // 原有
+var REQUEST_ID=genRequestId();                            // 新增①：页面加载时生成一次
+function genRequestId(){                                  // 新增②：生成函数
+    return (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxxxxxx'.replace(/x/g,function(){return (Math.random()*16|0).toString(16);}));
+}
 function auth(){return {headers:{Authorization:'Bearer '+tok()}};}
 function goCoupon(){location.href='./coupon.html';}
 
@@ -135,7 +139,7 @@ async function saveAddr(){
 }
 async function submit(){
     if(!SELECTED){document.getElementById('msg').textContent='请选择收货地址';return;}
-    var body={addressId:parseInt(SELECTED),remark:document.getElementById('remark').value.trim(),fromCart:true};
+    var body={addressId:parseInt(SELECTED),remark:document.getElementById('remark').value.trim(),fromCart:true,requestId:REQUEST_ID};
     if(USE_COUPON)body.userCouponId=parseInt(USE_COUPON);
     try{
         var r=await axios.post(BASE_URL+'/api/v1/orders',body,auth());

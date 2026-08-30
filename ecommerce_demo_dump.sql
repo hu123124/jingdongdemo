@@ -201,8 +201,10 @@ CREATE TABLE `t_order` (
   `remark` varchar(255) DEFAULT NULL COMMENT '订单备注',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `request_id` VARCHAR(64) DEFAULT NULL COMMENT '幂等请求ID',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no` (`order_no`),
+  UNIQUE KEY uk_request_id (request_id),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='订单主表';

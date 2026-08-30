@@ -20,6 +20,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationContext;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -124,8 +125,13 @@ public class OrderServiceImpl implements OrderService {
                 status(0).
                 addressSnapshot(addressSnapshot).
                 remark(orderRequest.getRemark()).
+                requestId(orderRequest.getRequestId()).   // ← 新增
                 build();
-        orderMapper.createOrder(order);
+        try {
+            orderMapper.createOrder(order);
+        } catch (DuplicateKeyException e) {//DuplicateKeyException：专门捕获数据库唯一主键冲突的类
+            throw new RuntimeException("订单已提交，请勿重复操作");
+        }
 
         for(OrderConfirmItemVO itemVO : orderConfirmItemVOList){
             OrderItem oi = OrderItem.builder()

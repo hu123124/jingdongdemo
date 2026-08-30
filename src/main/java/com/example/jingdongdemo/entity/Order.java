@@ -25,4 +25,5 @@ public class Order {
     private String remark;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    private String requestId;
 }

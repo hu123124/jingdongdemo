@@ -22,8 +22,8 @@
 <!--        LEFT JOIN t_user_coupon uc ON c.-->
 <!--    </select>-->
     <insert id="createOrder" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO t_order (order_no,user_id,total_amount,freight,pay_amount,status,address_snapshot,remark,create_time,update_time)
-        VALUES(#{orderNo},#{userId},#{totalAmount},#{freight},#{payAmount},#{status},#{addressSnapshot},#{remark},NOW(),NOW())
+        INSERT INTO t_order (order_no,user_id,total_amount,freight,pay_amount,status,address_snapshot,remark,request_id,create_time,update_time)
+        VALUES(#{orderNo},#{userId},#{totalAmount},#{freight},#{payAmount},#{status},#{addressSnapshot},#{remark},#{requestId},NOW(),NOW())
     </insert>
     <select id="getOrderByUserIdAndStatus" resultType="com.example.jingdongdemo.entity.Order">
         SELECT * FROM t_order WHERE user_id = #{userId}

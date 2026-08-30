@@ -10,4 +10,5 @@ public class OrderRequest {
     private Long userCouponId;
     private String remark;
     private Boolean fromCart;
+    private String requestId;
 }
