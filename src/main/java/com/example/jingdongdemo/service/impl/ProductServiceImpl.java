@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -42,6 +43,8 @@ public class ProductServiceImpl implements ProductService {
                 +  (productPageRequest.getKeyword() != null ? productPageRequest.getKeyword() : "") + ":"
                 + productPageRequest.getCategoryId();
 
+        String lockValue = UUID.randomUUID().toString();   // 每个请求唯一，防止误删别人的锁
+
         //查询缓存
         PageResultVO<ProductVO> cached = (PageResultVO<ProductVO>) redisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
@@ -55,7 +58,7 @@ public class ProductServiceImpl implements ProductService {
          */
         String rebuildLockKey = "lock:rebuild:" + cacheKey;
         //尝试添加该查询业务的锁
-        Boolean gotLock = redisTemplate.opsForValue().setIfAbsent(rebuildLockKey,"1",5,TimeUnit.SECONDS);
+        Boolean gotLock = redisTemplate.opsForValue().setIfAbsent(rebuildLockKey,lockValue,5,TimeUnit.SECONDS);
         //if (gotLock)防止gotLock为null导致 NullPointerException
         if(Boolean.TRUE.equals(gotLock)){//成功获取锁
             try {
@@ -65,7 +68,9 @@ public class ProductServiceImpl implements ProductService {
                 //查看是否为本次查询添加的锁，是就释放锁
                 String script = "if redis.call('get', KEYS[1]) == ARGV[1] then " +
                         "return redis.call('del', KEYS[1]) else return 0 end";
-                redisTemplate.execute(new DefaultRedisScript<>(script, Long.class), Collections.singletonList(rebuildLockKey), "1");
+                redisTemplate.execute(new DefaultRedisScript<>(script, Long.class),
+                        Collections.singletonList(rebuildLockKey),
+                        lockValue);
             }
         }
         for (int i = 0; i < 3; i++) {
