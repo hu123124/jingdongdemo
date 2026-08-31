@@ -26,6 +26,7 @@ public class Product {
     private String mainImage;
     private String subImages;
     private String detail;
+    /** SKU 最低价（计算字段：列表查询用 MIN(sku.price) 填充，t_product 表无此列） */
     private BigDecimal price;
     private Integer stock;
     private Integer status;      // 0下架 1在售

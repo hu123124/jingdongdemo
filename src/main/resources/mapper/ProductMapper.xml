@@ -5,14 +5,14 @@
 
     <select id="listProducts" resultType="com.example.jingdongdemo.entity.Product">
         SELECT p.id, p.category_id, p.name, p.subtitle, p.main_image, p.sub_images, p.detail,
-               COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), p.price) AS price,
+               COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), 0) AS price,
                (SELECT COALESCE(SUM(s2.stock), 0) FROM t_product_sku s2 WHERE s2.product_id = p.id) AS stock,
                p.status, p.sales, p.create_time, p.update_time
         FROM t_product p WHERE p.status = 1
         <if test="categoryId != null">AND p.category_id = #{categoryId}</if>
         <if test="keyword != null and keyword != ''">AND p.name LIKE CONCAT('%', #{keyword}, '%')</if>
-        <if test="minPrice != null">AND COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), p.price) &gt;= #{minPrice}</if>
-        <if test="maxPrice != null">AND COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), p.price) &lt;= #{maxPrice}</if>
+        <if test="minPrice != null">AND COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), 0) &gt;= #{minPrice}</if>
+        <if test="maxPrice != null">AND COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), 0) &lt;= #{maxPrice}</if>
         <choose>
             <when test="sort == 'price_asc'">ORDER BY price ASC</when>
             <when test="sort == 'price_desc'">ORDER BY price DESC</when>
@@ -20,4 +20,11 @@
             <otherwise>ORDER BY p.create_time DESC</otherwise>
         </choose>
     </select>
+
+    <!-- B端 - 删除商品下不在 keepIds 中的 SKU（更新时清理被移除的规格） -->
+    <delete id="deleteSkusNotIn">
+        DELETE FROM t_product_sku WHERE product_id = #{productId}
+        AND id NOT IN
+        <foreach collection="keepIds" item="kid" open="(" separator="," close=")">#{kid}</foreach>
+    </delete>
 </mapper>

@@ -4,6 +4,7 @@ import com.example.jingdongdemo.common.R;
 import com.example.jingdongdemo.entity.Product;
 import com.example.jingdongdemo.service.ProductService;
 import com.example.jingdongdemo.vo.PageResultVO;
+import com.example.jingdongdemo.vo.ProductSPUVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,12 @@ public class AdminProductController {
     public R<PageResultVO<Product>> list(@RequestParam(defaultValue = "1") Integer pageNum,
                                           @RequestParam(defaultValue = "15") Integer pageSize) {
         return R.ok(productService.adminList(pageNum, pageSize));
+    }
+
+    /** B端 - 商品详情（含 SKU 列表，编辑时回填用） */
+    @GetMapping("/{id}")
+    public R<ProductSPUVO> detail(@PathVariable Long id) {
+        return R.ok(productService.getDetailById(id));
     }
 
     /** B端 - 上下架 */

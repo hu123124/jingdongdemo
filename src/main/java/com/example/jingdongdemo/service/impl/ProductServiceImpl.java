@@ -1,8 +1,10 @@
 package com.example.jingdongdemo.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.IdUtil;
 import com.example.jingdongdemo.dto.ProductPageRequest;
 import com.example.jingdongdemo.entity.Product;
+import com.example.jingdongdemo.entity.ProductSKU;
 import com.example.jingdongdemo.mapper.ProductMapper;
 import com.example.jingdongdemo.service.ProductService;
 import com.example.jingdongdemo.vo.PageResultVO;
@@ -16,8 +18,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +98,13 @@ public class ProductServiceImpl implements ProductService {
         ProductSPUVO productSPUVO =  productMapper.getProductById(id);
         List<ProductSKUVO> productSKUVOList =  productMapper.getProductSKUSBySPUId(productSPUVO.getId());
         productSPUVO.setSkus(productSKUVOList);
+        // SPU 展示价 = SKU 最低价（t_product 已无 price 列）
+        if (productSKUVOList != null && !productSKUVOList.isEmpty()) {
+            productSPUVO.setPrice(productSKUVOList.stream()
+                    .map(ProductSKUVO::getPrice)
+                    .min(BigDecimal::compareTo)
+                    .orElse(null));
+        }
         return productSPUVO;
     }
 
@@ -127,23 +138,25 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /**
-     * B端 - 修改商品（改完删除商品列表缓存，防止 C 端读到旧数据）
+     * B端 - 修改商品：SPU 信息 + 同步 SKU 列表（有 id 的更新、没 id 的新增、没提交的删除）
      */
+    @Transactional
     @Override
     public void adminUpdate(Long id, Map<String, Object> body) {
         productMapper.updateProduct(id,
                 (String) body.get("name"),
                 (String) body.get("subtitle"),
-                new BigDecimal(body.getOrDefault("price", "0").toString()),
                 (String) body.get("mainImage"),
                 (String) body.get("detail"));
+        saveSkus(id, (List<Map<String, Object>>) body.get("skus"));
         clearProductCache();
     }
 
     /**
-     * B端 - 新增商品（新增后删除商品列表缓存，避免新商品不展示）
+     * B端 - 新增商品：SPU + 批量 SKU（规格/价格/库存）
      * @return 新商品 id
      */
+    @Transactional
     @Override
     public Long adminCreate(Map<String, Object> body) {
         Product p = new Product();
@@ -152,13 +165,50 @@ public class ProductServiceImpl implements ProductService {
         p.setSubtitle((String) body.getOrDefault("subtitle", null));
         p.setMainImage((String) body.getOrDefault("mainImage", null));
         p.setDetail((String) body.getOrDefault("detail", null));
-        p.setPrice(new BigDecimal(body.getOrDefault("price", "0").toString()));
         p.setStock(0);
         p.setStatus(1);
         p.setSales(0);
         productMapper.insertProduct(p);
+
+        saveSkus(p.getId(), (List<Map<String, Object>>) body.get("skus"));
         clearProductCache();
         return p.getId();
+    }
+
+    /**
+     * B端 - 同步保存商品 SKU 列表：
+     * 有 id 的走更新（保留 sku_id，避免购物车/订单引用失效），没 id 的新增，
+     * 最后删除前端没有提交的旧 SKU
+     */
+    private void saveSkus(Long productId, List<Map<String, Object>> skus) {
+        if (skus == null) return;
+        List<Long> keepIds = new ArrayList<>();
+        for (Map<String, Object> skuBody : skus) {
+            ProductSKU sku = new ProductSKU();
+            sku.setProductId(productId);
+            sku.setSpec((String) skuBody.get("spec"));
+            sku.setPrice(new BigDecimal(skuBody.get("price").toString()));
+            sku.setStock(Integer.valueOf(skuBody.get("stock").toString()));
+            Object idObj = skuBody.get("id");
+            if (idObj != null && !idObj.toString().isEmpty()) {
+                // 已有 SKU：更新（保留 sku_id，购物车/订单引用不失效）
+                Long skuId = Long.valueOf(idObj.toString());
+                sku.setId(skuId);
+                productMapper.updateSku(sku);
+                keepIds.add(skuId);
+            } else {
+                // 新 SKU：插入（insertSku 回填自增 id）
+                sku.setSkuCode(IdUtil.getSnowflakeNextIdStr());
+                productMapper.insertSku(sku);
+                keepIds.add(sku.getId());
+            }
+        }
+        // 清理前端没保留的旧 SKU
+        if (keepIds.isEmpty()) {
+            productMapper.deleteSkusByProductId(productId);
+        } else {
+            productMapper.deleteSkusNotIn(productId, keepIds);
+        }
     }
 
     /**
