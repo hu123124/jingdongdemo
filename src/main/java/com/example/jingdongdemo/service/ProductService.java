@@ -8,6 +8,7 @@ import com.example.jingdongdemo.vo.ProductSPUVO;
 import com.example.jingdongdemo.vo.ProductVO;
 
 import java.util.List;
+import java.util.Map;
 
 public interface ProductService {
 
@@ -29,4 +30,22 @@ public interface ProductService {
      */
     // ProductService 加
     void updateStatus(Long id, Integer status);
+
+    // ==================== B端 ====================
+
+    /**
+     * B端 - 商品列表（含下架商品，分页）
+     */
+    PageResultVO<Product> adminList(Integer pageNum, Integer pageSize);
+
+    /**
+     * B端 - 修改商品
+     */
+    void adminUpdate(Long id, Map<String, Object> body);
+
+    /**
+     * B端 - 新增商品
+     * @return 新商品 id
+     */
+    Long adminCreate(Map<String, Object> body);
 }

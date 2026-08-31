@@ -17,8 +17,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -105,9 +107,67 @@ public class ProductServiceImpl implements ProductService {
     public void updateStatus(Long id, Integer status) {
         productMapper.updateStatus(id, status);
         //先更新再删除，这里业务不涉及高并发，不考虑双删
-        Set<String> keys = redisTemplate.keys("products:list:*" );
+        clearProductCache();
+    }
+
+    // ==================== B端 ====================
+
+    /**
+     * B端 - 商品列表（含下架商品，分页）
+     */
+    @Override
+    public PageResultVO<Product> adminList(Integer pageNum, Integer pageSize) {
+        PageHelper.startPage(pageNum, pageSize);
+        List<Product> list = productMapper.listAllAdmin();
+        PageInfo<Product> info = new PageInfo<>(list);
+        PageResultVO<Product> result = new PageResultVO<>();
+        result.setList(list); result.setTotal(info.getTotal());
+        result.setPageNum(pageNum); result.setPageSize(pageSize); result.setPages(info.getPages());
+        return result;
+    }
+
+    /**
+     * B端 - 修改商品（改完删除商品列表缓存，防止 C 端读到旧数据）
+     */
+    @Override
+    public void adminUpdate(Long id, Map<String, Object> body) {
+        productMapper.updateProduct(id,
+                (String) body.get("name"),
+                (String) body.get("subtitle"),
+                new BigDecimal(body.getOrDefault("price", "0").toString()),
+                (String) body.get("mainImage"),
+                (String) body.get("detail"));
+        clearProductCache();
+    }
+
+    /**
+     * B端 - 新增商品（新增后删除商品列表缓存，避免新商品不展示）
+     * @return 新商品 id
+     */
+    @Override
+    public Long adminCreate(Map<String, Object> body) {
+        Product p = new Product();
+        p.setCategoryId(Long.valueOf(body.get("categoryId").toString()));
+        p.setName((String) body.get("name"));
+        p.setSubtitle((String) body.getOrDefault("subtitle", null));
+        p.setMainImage((String) body.getOrDefault("mainImage", null));
+        p.setDetail((String) body.getOrDefault("detail", null));
+        p.setPrice(new BigDecimal(body.getOrDefault("price", "0").toString()));
+        p.setStock(0);
+        p.setStatus(1);
+        p.setSales(0);
+        productMapper.insertProduct(p);
+        clearProductCache();
+        return p.getId();
+    }
+
+    /**
+     * B端 - 删除商品列表缓存（商品增/改/上下架后调用，防止读到旧数据）
+     */
+    private void clearProductCache() {
+        Set<String> keys = redisTemplate.keys("products:list:*");
         if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete( keys );
+            redisTemplate.delete(keys);
         }
     }
 
