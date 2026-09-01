@@ -125,8 +125,9 @@ async function saveProd(id){
     if(!ok)return;
     if(skus.length===0){toast('至少添加一个SKU',false);return;}
     var d={categoryId:SEL_CAT.id,name:name,subtitle:document.getElementById('prodSubtitle').value.trim(),mainImage:document.getElementById('prodImage').value.trim(),detail:document.getElementById('prodDetail').value.trim(),skus:skus};
-    var r;if(id){r=await admApi('/api/admin/v1/products/'+id,'PUT',d);}else{r=await admApi('/api/admin/v1/products','POST',d);}
+    var r;try{if(id){r=await admApi('/api/admin/v1/products/'+id,'PUT',d);}else{r=await admApi('/api/admin/v1/products','POST',d);}}catch(e){toast('网络请求失败，请重试',false);return;}
     if(r.code===200){closeModal();toast(id?'修改成功':'添加成功',true);var pr=await admApi('/api/admin/v1/products?pageSize=500');if(pr.code===200){PRODS=pr.data.list||[];renderTree();if(SEL_CAT)showProdPanel();}}
+    else{toast((r&&r.message)||'保存失败',false);}
 }
 async function toggleProd(id,st){await admApi('/api/admin/v1/products/'+id+'/status','PUT',{status:st});toast(st?'已上架':'已下架',true);var pr=await admApi('/api/admin/v1/products?pageSize=500');if(pr.code===200){PRODS=pr.data.list||[];renderTree();if(SEL_CAT)showProdPanel();}}
 
