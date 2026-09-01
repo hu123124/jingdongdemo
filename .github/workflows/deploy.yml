@@ -93,7 +93,7 @@ jobs:
           password: ${{ secrets.SSH_PASS }}
           source: "frontend/css/*,frontend/js/*"
           target: "/usr/local/nginx/html/jd"
-          strip_components: 2
+          strip_components: 1
 
       # 后端：jar 上传到服务器 deploy 目录（与 Dockerfile 同目录）
       - name: 上传后端 jar

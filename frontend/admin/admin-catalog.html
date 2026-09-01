@@ -97,8 +97,9 @@ async function openProdForm(id){
     var skus=[];
     if(id&&p){try{var dr=await admApi('/api/admin/v1/products/'+id);if(dr.code===200&&dr.data.skus)skus=dr.data.skus;}catch(e){}}
     openModal(id?'编辑商品':'添加商品到「'+SEL_CAT.name+'」',
-        '<div class="row"><input id="prodImage" placeholder="主图URL（可手动填或点右侧上传）" value="'+(p?p.mainImage||'':'')+'"><button class="btn btn-primary" onclick="document.getElementById(\'prodImageFile\').click()">上传</button></div>'
-        +'<input type="file" id="prodImageFile" accept="image/*" style="display:none" onchange="admUpload(this,function(u){if(u){document.getElementById(\'prodImage\').value=u;var pv=document.getElementById(\'prodImagePrev\');pv.src=u;pv.style.display=\'block\';}})">'
+        '<input id="prodName" placeholder="商品名称" value="'+(p?p.name:'')+'">'
+        +'<input id="prodSubtitle" placeholder="副标题" value="'+(p?p.subtitle||'':'')+'">'
+        +'<div class="row"><input id="prodImage" placeholder="主图URL（可手动填或点右侧上传）" value="'+(p?p.mainImage||'':'')+'"><button class="btn btn-primary" onclick="document.getElementById(\'prodImageFile\').click()">上传</button></div>'        +'<input type="file" id="prodImageFile" accept="image/*" style="display:none" onchange="admUpload(this,function(u){if(u){document.getElementById(\'prodImage\').value=u;var pv=document.getElementById(\'prodImagePrev\');pv.src=u;pv.style.display=\'block\';}})">'
         +'<img id="prodImagePrev" src="'+(p?p.mainImage||'':'')+'" style="display:'+((p&&p.mainImage)?'block':'none')+';width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #eee;margin-bottom:12px">'
         +'<textarea id="prodDetail" placeholder="商品详情HTML">'+(p?p.detail||'':'')+'</textarea>'        +'<div class="sku-box"><div class="sku-box-hd"><span>SKU 规格（至少 1 条）</span><button class="btn btn-primary btn-sm" onclick="addSkuRow()">+ 添加规格</button></div><div id="skuRows"></div></div>'
         +'<div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">取消</button><button class="btn-confirm" onclick="saveProd('+(id||0)+')">保存</button></div>');
