@@ -19,7 +19,7 @@ public class ProductSKU {
     private String spec;
     private BigDecimal price;
     private Integer stock;
-    private String images;
+    private String image;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

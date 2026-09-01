@@ -73,6 +73,22 @@ function admApi(url, method, data) {
     return fetch(BASE_URL + url, options).then(function (r) { return r.json(); });
 }
 
+// 文件上传（图片）：选完文件自动调后端上传接口，成功回调返回图片 URL
+function admUpload(fileInput, cb) {
+    var f = fileInput.files[0];
+    if (!f) { cb(null); return; }
+    var fd = new FormData();
+    fd.append('file', f);                       // 字段名必须和后端 @RequestParam("file") 一致
+    fetch(BASE_URL + '/api/admin/v1/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + admTok() },   // 接口在 /api/admin/** 下，必须带管理员 token
+        body: fd
+    }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res.code === 200 && res.data && res.data.url) { cb(res.data.url); }
+        else { toast((res && res.message) || '上传失败', false); cb(null); }
+    }).catch(function () { toast('上传失败', false); cb(null); });
+}
+
 function toast(msg, ok) {
     var t = document.getElementById('toast');
     if (!t) return;

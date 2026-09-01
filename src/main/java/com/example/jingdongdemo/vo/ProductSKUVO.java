@@ -11,5 +11,5 @@ import java.math.BigDecimal;
       private String spec;
       private BigDecimal price;
       private Integer stock;
-      private String Images;
+      private String image;
   }

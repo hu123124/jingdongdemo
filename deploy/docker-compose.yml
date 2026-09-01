@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  # ========== Redis 缓存 ==========
+  redis:
+    image: redis:7-alpine
+    container_name: jd-redis
+    network_mode: host
+    restart: always
+    command: redis-server --requirepass redis123456 --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  # ========== Spring Boot 应用 ==========
+  jd-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jd-app:1.0
+    container_name: jd-app
+    network_mode: host
+    restart: always
+    environment:
+      - SPRING_DATASOURCE_PASSWORD=1234
+      - SPRING_DATA_REDIS_PASSWORD=redis123456
+      # ===== MinIO（对象存储，图片存 B 台服务器）=====
+      - MINIO_ENDPOINT=https://img.devbug.icu
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:?未配置 MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?未配置 MINIO_SECRET_KEY}
+      - MINIO_BUCKET=jd-images
+      - TZ=Asia/Shanghai
+    depends_on:
+      - redis
+
+volumes:
+  redis-data:

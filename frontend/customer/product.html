@@ -57,9 +57,9 @@ function render(p){
     }
     var price=selSku?selSku.price:p.price;
     var stock=selSku?selSku.stock:p.stock;
-    var img=p.mainImage||'https://picsum.photos/seed/'+p.id+'/500/500';
+    var img=(selSku&&selSku.image)p.mainImage||'https://picsum.photos/seed/'+p.id+'/500/500';
     document.getElementById('detail').innerHTML=
-        '<div class="images"><img class="main" src="'+img+'" onerror="this.src=\'https://picsum.photos/seed/'+Math.random()+'/500/500\'"></div>'+
+        '<div class="images"><img class="main" id="mainImg" src="'+img+'" onerror="this.src=\'https://picsum.photos/seed/'+Math.random()+'/500/500\'"></div>'+
         '<div class="info"><div class="name">'+p.name+'</div><div class="subtitle">'+(p.subtitle||'')+'</div>'+
         '<div class="price-box"><div class="label">价格</div><div class="price" id="curPrice">¥'+(price||0).toFixed(2)+'</div><div class="stock" id="curStock">库存：'+(stock||0)+'</div></div>'+
         skuHtml+
@@ -74,6 +74,11 @@ function pickSku(idx){
     document.getElementById('curPrice').textContent='¥'+(selSku.price||0).toFixed(2);
     document.getElementById('curStock').textContent='库存：'+(selSku.stock||0);
     document.getElementById('qty').max=selSku.stock;
+    if(selSku.image)
+    {
+        var m=document.getElementById('mainImg');
+        if(m)m.src=selSku.image;
+    }
 }
 async function addCart(){
     if(!isLogin()){location.href='./login.html';return;}
@@ -88,6 +93,8 @@ document.addEventListener('DOMContentLoaded',function(){updateNav();load();});
 <!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
 <div style="text-align:center;padding:12px 0;color:#999;font-size:13px;line-height:24px;">
   <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <a target="_blank" href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=44130202001698" style="display:inline-block;text-decoration:none;height:20px;line-height:20px;"><img src="http://www.beian.gov.cn/img/ghs.png" style="float:left;"/><span style="float:left;height:20px;line-height:20px;margin:0 0 0 5px;color:#999;">粤公网安备 44130202001698号</span></a>
 </div>
 </body>
 </html>

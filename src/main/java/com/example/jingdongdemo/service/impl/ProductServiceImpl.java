@@ -189,6 +189,7 @@ public class ProductServiceImpl implements ProductService {
             sku.setSpec((String) skuBody.get("spec"));
             sku.setPrice(new BigDecimal(skuBody.get("price").toString()));
             sku.setStock(Integer.valueOf(skuBody.get("stock").toString()));
+            sku.setImage((String) skuBody.get("image"));
             Object idObj = skuBody.get("id");
             if (idObj != null && !idObj.toString().isEmpty()) {
                 // 已有 SKU：更新（保留 sku_id，购物车/订单引用不失效）

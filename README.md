@@ -7,7 +7,7 @@
 - B 端：https://jdemotob.devbug.icu （演示账号 admin / admin123）
 
 ## 技术栈
-Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + JJWT · PageHelper · Hutool · Docker · Nginx · HTTPS
+Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + JJWT · PageHelper · Hutool · Docker · Nginx · HTTPS · MinIO
 
 ## 功能
 - C 端：注册登录、商品浏览/搜索/分页、购物车、下单（防超卖）、优惠券、订单管理、评价
@@ -20,12 +20,14 @@ Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + J
 4. **缓存**：空值缓存防穿透、互斥锁防击穿、随机 TTL 防雪崩
 5. **工程化**：雪花算法订单号、地址快照、Spring 事件异步解耦、BCrypt 密码加密、手机号脱敏
 6. **部署**：Docker Compose + Nginx 反向代理 + HTTPS，阿里云公网上线
+7. **对象存储**：基于 MinIO 将商品图片独立于应用存储、易于扩展；文件名 UUID 化防重名，类型白名单与 5MB 大小双重校验。应用启动时自动建桶并设置公开读策略，图片可直链访问，配置支持环境变量覆盖、适配多环境部署
 
 ## 本地启动
-1. 安装 JDK 17、Maven，启动 MySQL（导入 `ecommerce_demo_dump.sql`）与 Redis
+1. 安装 JDK 17、Maven，启动 MySQL（导入 `ecommerce_demo_dump.sql`）与 Redis；本地需先启动 MinIO（默认账号 minioadmin / minioadmin），否则应用启动时会连接失败
 2. 通过环境变量配置（不设置则使用 `application.properties` 中的本地默认值）：
    - `MYSQL_USERNAME` / `MYSQL_PASSWORD`
    - `JWT_SECRET`（生产环境必须设置，仓库内不存真实密钥）
+   - `MINIO_ENDPOINT` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` / `MINIO_BUCKET`（本地默认 http://localhost:9000 / minioadmin / minioadmin / jd-images）
 3. 启动：`./mvnw spring-boot:run`（Windows 用 `mvnw.cmd spring-boot:run`）
 
 ## 部署

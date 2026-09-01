@@ -57,13 +57,13 @@ public interface ProductMapper {
     // ==================== SKU ====================
 
     /** B端 - 新增 SKU */
-    @Insert("INSERT INTO t_product_sku (product_id, sku_code, spec, price, stock, status, create_time, update_time) " +
-            "VALUES (#{productId}, #{skuCode}, #{spec}, #{price}, #{stock}, 1, NOW(), NOW())")
+    @Insert("INSERT INTO t_product_sku (product_id, sku_code, spec, price, stock, image, status, create_time, update_time) " +
+            "VALUES (#{productId}, #{skuCode}, #{spec}, #{price}, #{stock}, #{image}, 1, NOW(), NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insertSku(ProductSKU sku);
 
     /** B端 - 修改 SKU */
-    @Update("UPDATE t_product_sku SET spec=#{spec}, price=#{price}, stock=#{stock}, update_time=NOW() WHERE id=#{id}")
+    @Update("UPDATE t_product_sku SET spec=#{spec}, price=#{price}, stock=#{stock}, image=#{image}, update_time=NOW() WHERE id=#{id}")
     void updateSku(ProductSKU sku);
 
     /** B端 - 删除商品下所有 SKU */

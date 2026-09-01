@@ -30,6 +30,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{background:#fafafa;p
 .sku-row input{margin-bottom:0;padding:8px;font-size:13px}
 .sku-row .sku-spec{flex:2}.sku-row .sku-price{flex:1}.sku-row .sku-stock{flex:1}
 .sku-row .btn{white-space:nowrap;margin-right:0}
+.sku-img-prev{width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #eee;flex-shrink:0}
 .empty{text-align:center;padding:40px;color:#999}
 </style></head><body>
 <div class="sidebar"><div class="logo">JDemo Admin</div><a href="./admin-dashboard.html">数据概览</a><a class="active" href="./admin-catalog.html">商品目录</a><a href="./admin-orders.html">订单管理</a><a href="./admin-users.html">用户管理</a><a href="./admin-coupons.html">优惠券管理</a></div>
@@ -79,10 +80,15 @@ function showProdPanel(){document.getElementById('emptyHint').style.display='non
 
 // Product CRUD（SPU + SKU）
 function skuRowHtml(s){
+    var img=s&&s.image?s.image:'';
     return '<div class="sku-row"><input type="hidden" class="sku-id" value="'+(s&&s.id!==undefined?s.id:'')+'">'
+        +'<input type="hidden" class="sku-image" value="'+img+'">'
         +'<input class="sku-spec" placeholder="规格，如 颜色:黑;存储:256GB" value="'+(s&&s.spec?s.spec:'')+'">'
         +'<input class="sku-price" type="number" step="0.01" placeholder="价格" value="'+(s&&s.price!==undefined?s.price:'')+'">'
         +'<input class="sku-stock" type="number" placeholder="库存" value="'+(s&&s.stock!==undefined?s.stock:'')+'">'
+        +'<img class="sku-img-prev" src="'+img+'" style="display:'+(img?'inline-block':'none')+'">'
+        +'<button class="btn btn-primary btn-sm" onclick="var f=this.closest(\'.sku-row\').querySelector(\'.sku-img-file\');f.click()">传图</button>'
+        +'<input type="file" class="sku-img-file" accept="image/*" style="display:none" onchange="var r=this.closest(\'.sku-row\');admUpload(this,function(u){if(u){r.querySelector(\'.sku-image\').value=u;var p=r.querySelector(\'.sku-img-prev\');p.src=u;p.style.display=\'inline-block\';}})">'
         +'<button class="btn btn-danger btn-sm" onclick="this.closest(\'.sku-row\').remove()">删</button></div>';
 }
 function addSkuRow(s){document.getElementById('skuRows').insertAdjacentHTML('beforeend',skuRowHtml(s||{}));}
@@ -91,11 +97,12 @@ async function openProdForm(id){
     var skus=[];
     if(id&&p){try{var dr=await admApi('/api/admin/v1/products/'+id);if(dr.code===200&&dr.data.skus)skus=dr.data.skus;}catch(e){}}
     openModal(id?'编辑商品':'添加商品到「'+SEL_CAT.name+'」',
-        '<input id="prodName" placeholder="商品名称" value="'+(p?p.name:'')+'"><input id="prodSubtitle" placeholder="副标题" value="'+(p?p.subtitle||'':'')+'"><input id="prodImage" placeholder="主图URL" value="'+(p?p.mainImage||'':'')+'"><textarea id="prodDetail" placeholder="商品详情HTML">'+(p?p.detail||'':'')+'</textarea>'
-        +'<div class="sku-box"><div class="sku-box-hd"><span>SKU 规格（至少 1 条）</span><button class="btn btn-primary btn-sm" onclick="addSkuRow()">+ 添加规格</button></div><div id="skuRows"></div></div>'
+        '<div class="row"><input id="prodImage" placeholder="主图URL（可手动填或点右侧上传）" value="'+(p?p.mainImage||'':'')+'"><button class="btn btn-primary" onclick="document.getElementById(\'prodImageFile\').click()">上传</button></div>'
+        +'<input type="file" id="prodImageFile" accept="image/*" style="display:none" onchange="admUpload(this,function(u){if(u){document.getElementById(\'prodImage\').value=u;var pv=document.getElementById(\'prodImagePrev\');pv.src=u;pv.style.display=\'block\';}})">'
+        +'<img id="prodImagePrev" src="'+(p?p.mainImage||'':'')+'" style="display:'+((p&&p.mainImage)?'block':'none')+';width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #eee;margin-bottom:12px">'
+        +'<textarea id="prodDetail" placeholder="商品详情HTML">'+(p?p.detail||'':'')+'</textarea>'        +'<div class="sku-box"><div class="sku-box-hd"><span>SKU 规格（至少 1 条）</span><button class="btn btn-primary btn-sm" onclick="addSkuRow()">+ 添加规格</button></div><div id="skuRows"></div></div>'
         +'<div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">取消</button><button class="btn-confirm" onclick="saveProd('+(id||0)+')">保存</button></div>');
-    if(skus.length===0){addSkuRow();}else{skus.forEach(function(s){addSkuRow({id:s.id,spec:s.spec,price:s.price,stock:s.stock});});}
-}
+    if(skus.length===0){addSkuRow();}else{skus.forEach(function(s){addSkuRow({id:s.id,spec:s.spec,price:s.price,stock:s.stock,image:s.image});});}}
 async function saveProd(id){
     var name=document.getElementById('prodName').value.trim();
     if(!name){toast('请填写名称',false);return;}
@@ -108,7 +115,9 @@ async function saveProd(id){
         var skuId=row.querySelector('.sku-id').value;
         if(!spec){toast('SKU 规格不能为空',false);ok=false;return;}
         if(isNaN(price)||price<=0){toast('SKU 价格不正确',false);ok=false;return;}
+        var img=row.querySelector('.sku-image').value.trim();
         var s={spec:spec,price:price,stock:isNaN(stock)?0:stock};
+        if(img)s.image=img;
         if(skuId)s.id=parseInt(skuId);
         skus.push(s);
     });
@@ -166,5 +175,7 @@ init();
 <!-- 网站备案信息：工信部要求首页底部标注备案号并链接至 beian.miit.gov.cn -->
 <div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:8px 0;color:#999;font-size:13px;line-height:24px;background:#f0f2f5;">
   <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">粤ICP备2026102854号</a>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <a target="_blank" href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=44130202001698" style="display:inline-block;text-decoration:none;height:20px;line-height:20px;"><img src="http://www.beian.gov.cn/img/ghs.png" style="float:left;"/><span style="float:left;height:20px;line-height:20px;margin:0 0 0 5px;color:#999;">粤公网安备 44130202001698号</span></a>
 </div>
 </body></html>
