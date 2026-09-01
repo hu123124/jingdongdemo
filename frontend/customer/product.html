@@ -57,7 +57,7 @@ function render(p){
     }
     var price=selSku?selSku.price:p.price;
     var stock=selSku?selSku.stock:p.stock;
-    var img=(selSku&&selSku.image)p.mainImage||'https://picsum.photos/seed/'+p.id+'/500/500';
+    var img=(selSku&&selSku.image)||p.mainImage||'https://picsum.photos/seed/'+p.id+'/500/500';
     document.getElementById('detail').innerHTML=
         '<div class="images"><img class="main" id="mainImg" src="'+img+'" onerror="this.src=\'https://picsum.photos/seed/'+Math.random()+'/500/500\'"></div>'+
         '<div class="info"><div class="name">'+p.name+'</div><div class="subtitle">'+(p.subtitle||'')+'</div>'+
