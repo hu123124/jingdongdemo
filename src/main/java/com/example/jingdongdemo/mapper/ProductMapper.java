@@ -72,4 +72,8 @@ public interface ProductMapper {
 
     /** B端 - 删除商品下不在指定 id 集合中的 SKU（更新时清理被移除的规格） */
     void deleteSkusNotIn(@Param("productId") Long productId, @Param("keepIds") List<Long> keepIds);
+    /** ES 同步用：查单个商品 + SKU 最低价（price 是计算字段） */
+    @Select("SELECT p.*, COALESCE((SELECT MIN(s.price) FROM t_product_sku s WHERE s.product_id = p.id), 0) AS price " +
+            "FROM t_product p WHERE p.id = #{id}")
+    Product getProductWithPrice(@Param("id") Long id);
 }

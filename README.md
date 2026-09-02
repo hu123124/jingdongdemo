@@ -1,16 +1,16 @@
 # JDemo 电商平台
 
-基于 Spring Boot 3 + MyBatis + Redis 的仿京东电商全栈项目（前后端分离），从数据库设计到部署上线全程独立完成。
+基于 Spring Boot 3 + MyBatis + Redis + Elasticsearch 的仿京东电商全栈项目（前后端分离），从数据库设计到部署上线全程独立完成。
 
 ## 在线体验
 - C 端：https://jdemotoc.devbug.icu （演示账号 Tom / 123456）
 - B 端：https://jdemotob.devbug.icu （演示账号 admin / admin123）
 
 ## 技术栈
-Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + JJWT · PageHelper · Hutool · Docker · Nginx · HTTPS · MinIO
+Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + JJWT · PageHelper · Hutool · Docker · Nginx · HTTPS · MinIO · Elasticsearch 8.17 + IK 分词
 
 ## 功能
-- C 端：注册登录、商品浏览/搜索/分页、购物车、下单（防超卖）、优惠券、订单管理、评价
+- C 端：注册登录、商品浏览/全文检索(ES+IK+高亮)/分页、购物车、下单（防超卖）、优惠券、订单管理、评价
 - B 端：商品 / 分类 / 订单 / 优惠券 / 用户管理
 
 ## 核心亮点
@@ -21,13 +21,15 @@ Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + J
 5. **工程化**：雪花算法订单号、地址快照、Spring 事件异步解耦、BCrypt 密码加密、手机号脱敏
 6. **部署**：Docker Compose + Nginx 反向代理 + HTTPS，阿里云公网上线
 7. **对象存储**：基于 MinIO 将商品图片独立于应用存储、易于扩展；文件名 UUID 化防重名，类型白名单与 5MB 大小双重校验。应用启动时自动建桶并设置公开读策略，图片可直链访问，配置支持环境变量覆盖、适配多环境部署
+8. **ES 全文检索**：基于 Elasticsearch 8 + IK 中文分词重构商品搜索——商品增改/上下架事务提交后经事件异步双写 ES、应用启动全量重建兜底（最终一致）；C 端关键词走 multi_match 加权检索 + 命中词高亮 + 分类/价格 filter + from/size 分页；ES 故障自动降级 + 配置开关一键切回 MySQL LIKE，搜索挂了业务不挂
 
 ## 本地启动
-1. 安装 JDK 17、Maven，启动 MySQL（导入 `ecommerce_demo_dump.sql`）与 Redis；本地需先启动 MinIO（默认账号 minioadmin / minioadmin），否则应用启动时会连接失败
+1. 安装 JDK 17、Maven，启动 MySQL（导入 `ecommerce_demo_dump.sql`）与 Redis；本地需先启动 MinIO（默认账号 minioadmin / minioadmin），否则应用启动时会连接失败；搜索功能依赖远端 Elasticsearch（默认 http://8.138.45.121:9200，已内置配置）
 2. 通过环境变量配置（不设置则使用 `application.properties` 中的本地默认值）：
    - `MYSQL_USERNAME` / `MYSQL_PASSWORD`
    - `JWT_SECRET`（生产环境必须设置，仓库内不存真实密钥）
    - `MINIO_ENDPOINT` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` / `MINIO_BUCKET`（本地默认 http://localhost:9000 / minioadmin / minioadmin / jd-images）
+   - `ES_URIS` / `ES_SEARCH_ENABLED`（ES 地址与搜索开关，本地默认 8.138.45.121:9200 / true）
 3. 启动：`./mvnw spring-boot:run`（Windows 用 `mvnw.cmd spring-boot:run`）
 
 ## 部署
@@ -44,8 +46,9 @@ src/main/java/com/example/jingdongdemo
 ├── service/      # 业务层（含实现类）
 ├── mapper/       # MyBatis 数据访问层
 ├── entity/ dto/ vo/  # 数据模型 / 请求 / 响应
+├── document/     # ES 文档模型 + 仓储（对应 ES 索引，类比 entity 对应 MySQL 表）
 ├── config/       # Security / Redis / JWT 配置
 ├── common/       # 统一响应、全局异常、工具类
 ├── task/         # 定时任务（超时关单）
-└── listener/     # 事件监听（下单异步解耦）
+└── listener/     # 事件监听（下单异步解耦、商品变更同步 ES）
 ```

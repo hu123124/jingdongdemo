@@ -5,3 +5,10 @@
 /* 通用输入框 */
 .input { padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; }
 .input:focus { border-color: #e4393c; }
+
+/* 搜索结果高亮（ES highlight 返回的 <em>） */
+.name em, .subtitle em {
+    color: #e4393c;      /* 京东红 */
+    font-style: normal;  /* 去掉 <em> 默认斜体 */
+    font-weight: bold;
+}

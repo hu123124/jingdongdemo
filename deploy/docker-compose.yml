@@ -29,6 +29,9 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?未配置 MINIO_SECRET_KEY}
       - MINIO_BUCKET=jd-images
       - TZ=Asia/Shanghai
+       # ===== Elasticsearch（全文搜索，B 台服务器 9200）=====
+      - ES_URIS=${ES_URIS:http://8.138.45.121:9200}
+      - ES_SEARCH_ENABLED=${ES_SEARCH_ENABLED:true}
     depends_on:
       - redis
 

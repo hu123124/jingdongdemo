@@ -104,6 +104,11 @@
             <artifactId>minio</artifactId>
             <version>8.5.12</version>
         </dependency>
+        <!-- Elasticsearch 全文检索 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

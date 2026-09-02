@@ -19,6 +19,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.jingdongdemo.event.ProductChangedEvent;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.annotation.Value;
+import com.example.jingdongdemo.service.EsProductSearchService;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -37,9 +41,23 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ApplicationEventPublisher eventPublisher;
+    private final EsProductSearchService esProductSearchService;
+    /** ES 搜索总开关（生产故障时可一键关掉走 MySQL） */
+    @Value("${es.search.enabled:true}")
+    private boolean esSearchEnabled;
 
     @Override
     public PageResultVO<ProductVO> listProduct(ProductPageRequest productPageRequest) {
+        // ===== ES 全文检索分支：开关开启 且 有关键词 才走 ES =====
+        if (esSearchEnabled && productPageRequest.getKeyword() != null
+                && !productPageRequest.getKeyword().trim().isEmpty()) {
+            try {
+                return esProductSearchService.search(productPageRequest);
+            } catch (Exception e) {
+                log.warn("ES 搜索失败，降级 MySQL LIKE：{}", e.getMessage());
+            }
+        }
         // 防御：空参数时用默认值
         int pageNum = productPageRequest.getPageNum() != null ? productPageRequest.getPageNum() : 1;
         int pageSize = productPageRequest.getPageSize() != null ? productPageRequest.getPageSize() : 10;
@@ -119,6 +137,8 @@ public class ProductServiceImpl implements ProductService {
         productMapper.updateStatus(id, status);
         //先更新再删除，这里业务不涉及高并发，不考虑双删
         clearProductCache();
+        // 通知 ES 同步：上架→写文档，下架→syncOne 内部会删文档
+        eventPublisher.publishEvent(new ProductChangedEvent(id));
     }
 
     // ==================== B端 ====================
@@ -150,6 +170,8 @@ public class ProductServiceImpl implements ProductService {
                 (String) body.get("detail"));
         saveSkus(id, (List<Map<String, Object>>) body.get("skus"));
         clearProductCache();
+        // 通知 ES 同步（改名/改副标题/改 SKU 价格都会反映到文档）
+        eventPublisher.publishEvent(new ProductChangedEvent(id));
     }
 
     /**
@@ -172,6 +194,8 @@ public class ProductServiceImpl implements ProductService {
 
         saveSkus(p.getId(), (List<Map<String, Object>>) body.get("skus"));
         clearProductCache();
+        // 通知 ES 同步（新商品进索引）
+        eventPublisher.publishEvent(new ProductChangedEvent(p.getId()));
         return p.getId();
     }
 
