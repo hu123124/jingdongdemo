@@ -56,6 +56,15 @@ jobs:
       - name: 拉取代码（含前端静态文件）
         uses: actions/checkout@v4
 
+      # 自动注入版本号：每次 push 用 git 短提交号当 ?v=，
+      # URL 一变浏览器缓存彻底失效，所有人强制拿新版 JS（防缓存利器）
+      - name: 注入前端版本号（防浏览器缓存旧 JS）
+        run: |
+          VER=$(git rev-parse --short HEAD)
+          echo "本次版本号: ${VER}"
+          sed -i "s|src=\"\.\./js/common\.js\"|src=\"../js/common.js?v=${VER}\"|g" \
+            frontend/customer/*.html frontend/admin/*.html
+
       - name: 下载 jar 产物
         uses: actions/download-artifact@v4
         with:
@@ -106,17 +115,6 @@ jobs:
           target: "${{ secrets.DEPLOY_DIR }}"
           strip_components: 1
 
-      # 部署配置：docker-compose.yml 随代码走（服务器上那份会被覆盖，以此文件为准）
-      - name: 上传 docker-compose.yml
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASS }}
-          source: "deploy/docker-compose.yml"
-          target: "${{ secrets.DEPLOY_DIR }}"
-          strip_components: 1
-
       # 后端：用新 jar 重建容器
       - name: 重建后端容器
         uses: appleboy/ssh-action@v1
@@ -126,8 +124,6 @@ jobs:
           password: ${{ secrets.SSH_PASS }}
           script: |
             cd "${{ secrets.DEPLOY_DIR }}"
-            export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY }}"
-            export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY }}"
             docker compose up -d --build
 
       # 健康检查：网站能访问 + ICP 备案号在源码里
