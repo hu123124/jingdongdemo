@@ -1,15 +1,18 @@
 # ============================================================
 # JDemo 全自动部署流水线（GitHub Actions）
 #
-# 触发方式：push 到 main 分支自动部署；也可在 Actions 页手动点 Run workflow
-# 流程：编译后端 jar → 同步前端静态文件 → 上传 jar → 重建后端容器 → 健康检查
+# 触发方式：
+#   1) push 到 main：按提交差异【选择性部署】——改了什么就部署什么，前端秒级
+#   2) 手动 Run workflow：完整部署（编译+前端+后端+重建容器），兜底
 #
-# 需要的 GitHub Secrets（仓库 Settings → Secrets and variables → Actions → New repository secret）：
-#   SSH_HOST   服务器 IP，如 8.138.246.96
-#   SSH_USER   登录用户名，如 root
-#   SSH_PASS   服务器 root 密码
-#   DEPLOY_DIR 服务器上 docker-compose.yml 所在目录，如 /root/jd-deploy
-#   MINIO_ACCESS_KEY / MINIO_SECRET_KEY  MinIO 对象存储密钥（docker-compose 部署时注入）
+# 变更分组：
+#   frontend → 只上传前端（不编译、不重建容器）
+#   backend  → Maven 编译 jar + 上传 jar + 重建容器
+#   compose  → 上传 docker-compose.yml + 重建容器
+#
+# 需要的 GitHub Secrets（仓库 Settings → Secrets and variables → Actions）：
+#   SSH_HOST / SSH_USER / SSH_PASS / DEPLOY_DIR
+#   MINIO_ACCESS_KEY / MINIO_SECRET_KEY（docker-compose 部署时注入）
 # ============================================================
 name: Deploy JDemo
 
@@ -24,15 +27,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ========== ① 编译后端 ==========
-  build:
-    name: ① 编译后端 jar
+  deploy:
+    name: 按变更选择性部署
     runs-on: ubuntu-latest
     steps:
+      # 拉代码（fetch-depth: 0 才能对比上次提交的差异）
       - name: 拉取代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # 检测本次提交改了哪些文件（手动触发时跳过检测 → 下方条件走 workflow_dispatch 分支全量执行）
+      - name: 检测变更范围
+        id: changes
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'src/**'
+              - 'pom.xml'
+              - 'deploy/Dockerfile'
+            compose:
+              - 'deploy/docker-compose.yml'
+
+      # ================= 后端：编译（改了后端才编译） =================
       - name: 安装 JDK 17
+        if: steps.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -40,39 +63,20 @@ jobs:
           cache: maven
 
       - name: Maven 打包（跳过测试）
+        if: steps.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
         run: mvn -B -DskipTests package
 
-      - name: 上传 jar 产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-jar
-          path: target/*.jar
-
-  # ========== ② 部署到服务器 ==========
-  deploy:
-    name: ② 部署到阿里云服务器
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: 拉取代码（含前端静态文件）
-        uses: actions/checkout@v4
-
-      # 自动注入版本号：每次 push 用 git 短提交号当 ?v=，URL 一变浏览器缓存彻底失效
+      # ============ 前端：注入版本号 + 上传（改了前端才上传） ============
       - name: 注入前端版本号（防浏览器缓存旧 JS）
+        if: steps.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           VER=$(git rev-parse --short HEAD)
           echo "本次版本号: ${VER}"
           sed -i "s|src=\"\.\./js/common\.js\"|src=\"../js/common.js?v=${VER}\"|g" \
             frontend/customer/*.html frontend/admin/*.html
 
-      - name: 下载 jar 产物
-        uses: actions/download-artifact@v4
-        with:
-          name: app-jar
-          path: ./artifact
-
-      # 前端：仓库 frontend/customer → 服务器 /usr/local/nginx/html/jd/customer
       - name: 同步前端 C端 → customer
+        if: steps.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -82,8 +86,8 @@ jobs:
           target: "/usr/local/nginx/html/jd/customer"
           strip_components: 2
 
-      # 前端：仓库 frontend/admin → 服务器 /usr/local/nginx/html/jd/admin
       - name: 同步前端 B端 → admin
+        if: steps.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -93,8 +97,8 @@ jobs:
           target: "/usr/local/nginx/html/jd/admin"
           strip_components: 2
 
-      # 前端：css / js 直接覆盖到 jd 根目录
       - name: 同步前端 css / js
+        if: steps.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -104,19 +108,21 @@ jobs:
           target: "/usr/local/nginx/html/jd"
           strip_components: 1
 
-      # 后端：jar 上传到服务器 deploy 目录（与 Dockerfile 同目录）
+      # ================= 后端：上传 jar（改了后端才上传） =================
       - name: 上传后端 jar
+        if: steps.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASS }}
-          source: "artifact/*.jar"
+          source: "target/*.jar"
           target: "${{ secrets.DEPLOY_DIR }}"
           strip_components: 1
 
-      # 部署配置：docker-compose.yml 随代码走（服务器上那份会被覆盖，以此文件为准）
+      # ============ 部署配置：docker-compose 随代码走（改了才上传） ============
       - name: 上传 docker-compose.yml
+        if: steps.changes.outputs.compose == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -126,8 +132,9 @@ jobs:
           target: "${{ secrets.DEPLOY_DIR }}"
           strip_components: 1
 
-      # 后端：用新 jar 重建容器
+      # 重建容器：改了后端 或 改了 compose 才重建（前端改动不重建，省时间）
       - name: 重建后端容器
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -139,7 +146,7 @@ jobs:
             export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY }}"
             docker compose up -d --build
 
-      # 健康检查：网站能访问 + ICP 备案号在源码里
+      # 健康检查：每次必跑（1 秒），确认网站与备案号正常
       - name: 健康检查（验证网站与备案号）
         uses: appleboy/ssh-action@v1
         with:
