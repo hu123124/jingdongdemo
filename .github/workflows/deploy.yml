@@ -9,6 +9,7 @@
 #   SSH_USER   登录用户名，如 root
 #   SSH_PASS   服务器 root 密码
 #   DEPLOY_DIR 服务器上 docker-compose.yml 所在目录，如 /root/jd-deploy
+#   MINIO_ACCESS_KEY / MINIO_SECRET_KEY  MinIO 对象存储密钥（docker-compose 部署时注入）
 # ============================================================
 name: Deploy JDemo
 
@@ -55,6 +56,14 @@ jobs:
     steps:
       - name: 拉取代码（含前端静态文件）
         uses: actions/checkout@v4
+
+      # 自动注入版本号：每次 push 用 git 短提交号当 ?v=，URL 一变浏览器缓存彻底失效
+      - name: 注入前端版本号（防浏览器缓存旧 JS）
+        run: |
+          VER=$(git rev-parse --short HEAD)
+          echo "本次版本号: ${VER}"
+          sed -i "s|src=\"\.\./js/common\.js\"|src=\"../js/common.js?v=${VER}\"|g" \
+            frontend/customer/*.html frontend/admin/*.html
 
       - name: 下载 jar 产物
         uses: actions/download-artifact@v4
