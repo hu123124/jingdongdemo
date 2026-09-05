@@ -15,6 +15,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RBloomFilter;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,10 @@ public class ProductServiceImpl implements ProductService {
     /** ES 搜索总开关（生产故障时可一键关掉走 MySQL） */
     @Value("${es.search.enabled:true}")
     private boolean esSearchEnabled;
+    // 字段区：加在 esProductSearchService 下面
+    private final RBloomFilter<Long> bloomFilter;
+    /** 空值缓存标记：区分"缓存里存了空"和"缓存里没有" */
+    private static final String EMPTY_CACHE = "__EMPTY__";
 
     @Override
     public PageResultVO<ProductVO> listProduct(ProductPageRequest productPageRequest) {
@@ -113,7 +118,28 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductSPUVO getDetailById(Long id) {
-        ProductSPUVO productSPUVO =  productMapper.getProductById(id);
+        /// ① 布隆过滤器前置拦截：说"不存在"就一定不存在，直接返回，不打缓存不打库
+        if (!bloomFilter.contains(id)) {
+            return null;
+        }
+
+        String cacheKey = "product:detail:" + id;
+
+        // ② 查缓存（空值也被缓存了，所以要区分）
+        Object cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            if (EMPTY_CACHE.equals(cached)) {
+                return null;                     // 命中空值标记 → 商品不存在
+            }
+            return (ProductSPUVO) cached;        // 命中正常数据
+        }
+        // ③ 缓存没命中 → 查数据库（顺手修了你原来没判空就 getId() 的隐患）
+        ProductSPUVO productSPUVO = productMapper.getProductById(id);
+        if (productSPUVO == null) {
+            // ④ 数据库也没有 → 写空值标记，TTL 短（60秒），商品真上架后能很快恢复
+            redisTemplate.opsForValue().set(cacheKey, EMPTY_CACHE, 60, TimeUnit.SECONDS);
+            return null;
+        }
         List<ProductSKUVO> productSKUVOList =  productMapper.getProductSKUSBySPUId(productSPUVO.getId());
         productSPUVO.setSkus(productSKUVOList);
         // SPU 展示价 = SKU 最低价（t_product 已无 price 列）
@@ -123,6 +149,10 @@ public class ProductServiceImpl implements ProductService {
                     .min(BigDecimal::compareTo)
                     .orElse(null));
         }
+        // ⑤ 写缓存：随机 TTL（5分钟±2分钟）顺带防雪崩
+        int ttl = 300 + ThreadLocalRandom.current().nextInt(120);
+        redisTemplate.opsForValue().set(cacheKey, productSPUVO, ttl, TimeUnit.SECONDS);
+
         return productSPUVO;
     }
 
@@ -137,6 +167,7 @@ public class ProductServiceImpl implements ProductService {
         productMapper.updateStatus(id, status);
         //先更新再删除，这里业务不涉及高并发，不考虑双删
         clearProductCache();
+        redisTemplate.delete("product:detail:" + id);   // 清理详细id缓存
         // 通知 ES 同步：上架→写文档，下架→syncOne 内部会删文档
         eventPublisher.publishEvent(new ProductChangedEvent(id));
     }
@@ -169,7 +200,12 @@ public class ProductServiceImpl implements ProductService {
                 (String) body.get("mainImage"),
                 (String) body.get("detail"));
         saveSkus(id, (List<Map<String, Object>>) body.get("skus"));
+        //清理缓存
         clearProductCache();
+        redisTemplate.delete("product:detail:" + id);
+
+        bloomFilter.add(id);   // 商品存在 → 种进布隆过滤器
+
         // 通知 ES 同步（改名/改副标题/改 SKU 价格都会反映到文档）
         eventPublisher.publishEvent(new ProductChangedEvent(id));
     }
@@ -194,6 +230,7 @@ public class ProductServiceImpl implements ProductService {
 
         saveSkus(p.getId(), (List<Map<String, Object>>) body.get("skus"));
         clearProductCache();
+        bloomFilter.add(p.getId());
         // 通知 ES 同步（新商品进索引）
         eventPublisher.publishEvent(new ProductChangedEvent(p.getId()));
         return p.getId();
