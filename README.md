@@ -39,6 +39,16 @@ Java 17 · Spring Boot 3.3.5 · MyBatis · MySQL · Redis · Spring Security + J
 docker compose up -d --build
 ```
 
+### 部署拓扑（两台阿里云服务器）
+- **A 台**：Nginx（HTTPS 反代 + 前端静态页）+ Spring Boot + MySQL + Redis（docker compose 部署，域名 devbug.icu / jdemotoc / jdemotob 反代到 C/B 端）
+- **B 台**：MinIO（对象存储，域名 img.devbug.icu 反代）+ Elasticsearch 8.17 + IK 分词（9200 端口，与 MinIO 同一 Docker Compose 编排，容器内存受限 1.5G / 堆 512m）
+
+### ES 连接与搜索降级
+- 应用通过 `ES_URIS` 环境变量连 B 台 ES（默认 http://8.138.45.121:9200，A→B 公网直连）
+- 商品增改/上下架 → 事务提交后事件异步双写 ES；应用启动全量重建索引兜底（MySQL 为唯一事实源）
+- `ES_SEARCH_ENABLED=false` 一键关闭 ES 搜索（自动回退 MySQL LIKE）
+- ⚠️ TODO（生产安全）：ES 未开启 xpack 账号认证，9200 建议云防火墙限制源 IP；当前数据为公开商品目录风险可控，商业上线前需开启安全认证
+
 ## 项目结构
 ```
 src/main/java/com/example/jingdongdemo

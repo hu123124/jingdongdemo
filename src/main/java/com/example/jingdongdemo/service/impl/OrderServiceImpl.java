@@ -19,6 +19,8 @@ import com.example.jingdongdemo.vo.*;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -44,8 +46,9 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemMapper orderItemMapper;
     private final CartMapper cartMapper;
     private final ProductMapper productMapper;
-    private final RedisTemplate<String, Object> redisTemplate;
+//    private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationContext applicationContext;
+    private final RedissonClient redissonClient;
 
 
     @Override
@@ -74,7 +77,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderVO createOrder(OrderRequest orderRequest) {
 
-        String lockValue = UUID.randomUUID().toString();   // 每个请求唯一，防止误删别人的锁
+//        String lockValue = UUID.randomUUID().toString();   // 每个请求唯一，防止误删别人的锁
 
         String orderNo = "OD"+ IdUtil.getSnowflakeNextId();
 
@@ -82,30 +85,23 @@ public class OrderServiceImpl implements OrderService {
         List<OrderConfirmItemVO>  orderConfirmItemVOList = orderMapper.getItems(userId);
 
         for (OrderConfirmItemVO item : orderConfirmItemVOList) {
-            String lockKey = "lock:sku:"+item.getSkuId();
-            //尝试获取锁
-            Boolean locked = redisTemplate.opsForValue()
-            // 原：.setIfAbsent(lockKey, String.valueOf(userId), 5, TimeUnit.SECONDS);
-                    .setIfAbsent(lockKey, lockValue, 5, TimeUnit.SECONDS);
-            if (Boolean.FALSE.equals(locked)){
+            RLock lock = redissonClient.getLock("lock:sku:" + item.getSkuId());
+            boolean locked;
+            try {
+                locked = lock.tryLock(0, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();          // 恢复中断标记，规范写法
                 throw new RuntimeException("系统繁忙，请稍后重试");
-            }
+            }  // 0=拿不到立即失败，保持原来"系统繁忙"行为
+            if (!locked) throw new RuntimeException("系统繁忙，请稍后重试");
             try {
                 int stock = orderItemMapper.deductStock(item.getSkuId(), item.getQuantity());
                 if (stock != 1) throw new RuntimeException("库存不足");
-            }finally {
-                //释放锁
-                //redisTemplate.delete(lockKey);无法解决锁过期
-                String script = "if redis.call('get',KEYS[1])==ARGV[1] then " +
-                        "return redis.call('del',KEYS[1])" +
-                        "else return 0 end";
-                redisTemplate.execute(
-                        new DefaultRedisScript<>(script,Long.class),
-                        Collections.singletonList(lockKey),
-                        lockValue
-                );
+            } finally {
+                lock.unlock();
             }
-        }
+            }
+
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         for(OrderConfirmItemVO itemVO : orderConfirmItemVOList){totalAmount=totalAmount.add(itemVO.getSubtotal());}
@@ -125,7 +121,7 @@ public class OrderServiceImpl implements OrderService {
                 status(0).
                 addressSnapshot(addressSnapshot).
                 remark(orderRequest.getRemark()).
-                requestId(orderRequest.getRequestId()).   // ← 新增
+                requestId(orderRequest.getRequestId()).   // ← 新增,幂等防
                 build();
         try {
             orderMapper.createOrder(order);
