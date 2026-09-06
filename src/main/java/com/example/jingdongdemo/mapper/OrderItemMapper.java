@@ -16,7 +16,7 @@ public interface OrderItemMapper {
     void insert(OrderItem oi);
 
     // ✅ @Update + WHERE stock >= quantity + 返回值 = 影响行数
-    @Update("UPDATE t_product_sku SET stock = stock - #{quantity} WHERE id = #{skuId} AND stock >= #{quantity}")
+    @Update("UPDATE t_product_sku SET stock = stock - #{quantity} WHERE id = #{skuId} AND stock >= #{quantity} AND #{quantity} > 0")
     int deductStock(@Param("skuId") Long skuId, @Param("quantity") Integer quantity);
 
     @Select("select * from t_order_item where order_no = #{orderNo}")

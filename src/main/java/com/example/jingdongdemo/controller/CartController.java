@@ -12,6 +12,7 @@ import com.example.jingdongdemo.vo.CartVO;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.annotations.Delete;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,7 @@ public class CartController {
     private final CartService cartService;
 
     @PostMapping
-    public R<Void> addCart(@RequestBody CartRequest cartRequest){
+    public R<Void> addCart(@RequestBody @Valid CartRequest cartRequest){
         cartService.addCart(cartRequest);
         return R.ok();
     }

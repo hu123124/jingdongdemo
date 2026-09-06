@@ -85,6 +85,13 @@ public class OrderServiceImpl implements OrderService {
         Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         List<OrderConfirmItemVO>  orderConfirmItemVOList = orderMapper.getItems(userId);
 
+        // 防御:购物车数据可能被脏写(负数/空),下单前必须兜底校验,不能信任前端和购物车
+        for (OrderConfirmItemVO item : orderConfirmItemVOList) {
+            if (item.getQuantity() == null || item.getQuantity() < 1) {
+                throw new RuntimeException("商品数量不合法，请重新选购");
+            }
+        }
+
         for (OrderConfirmItemVO item : orderConfirmItemVOList) {
             RLock lock = redissonClient.getLock("lock:sku:" + item.getSkuId());
             boolean locked;

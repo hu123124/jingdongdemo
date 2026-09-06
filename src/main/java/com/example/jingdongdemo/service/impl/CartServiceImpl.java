@@ -64,6 +64,9 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void updateQuantity(Long id, Integer quantity) {
+        if (quantity == null || quantity < 1) {
+            throw new RuntimeException("商品数量不合法");
+        }
         cartMapper.updateQuantityWithId(id,quantity);
     }
 
