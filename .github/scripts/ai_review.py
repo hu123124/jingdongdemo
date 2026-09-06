@@ -13,7 +13,12 @@ if not os.path.exists("/tmp/pr.diff"):
     print("错误: /tmp/pr.diff 不存在,diff 生成步骤可能失败了")
     sys.exit(1)
 
-diff = open("/tmp/pr.diff", encoding="utf-8", errors="replace").read()
+try:
+    with open("/tmp/pr.diff", encoding="utf-8", errors="replace") as f:
+        diff = f.read()
+except Exception as e:
+    print(f"读取 diff 失败: {e}")
+    sys.exit(1)
 if len(diff) > 30000:          # 控 token 成本,超大 diff 截断
     diff = diff[:30000] + "\n...[diff 过大已截断]..."
 
