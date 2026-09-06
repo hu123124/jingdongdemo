@@ -19,7 +19,14 @@ jobs:
       - name: 生成 diff
         run: |
           git fetch origin ${{ github.event.pull_request.base.sha }}
-          git diff ${{ github.event.pull_request.base.sha }}...HEAD > /tmp/pr.diff || true
+          if ! git diff ${{ github.event.pull_request.base.sha }}...HEAD > /tmp/pr.diff; then
+            echo "::error::git diff 命令执行失败"
+            exit 1
+          fi
+          if [ ! -s /tmp/pr.diff ]; then
+            echo "::warning::diff 文件为空,跳过 AI 审查"
+            exit 0
+          fi
           echo "diff 行数: $(wc -l < /tmp/pr.diff)"
 
       - name: 调用 AI 审查

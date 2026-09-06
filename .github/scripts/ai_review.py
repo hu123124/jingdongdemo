@@ -2,7 +2,10 @@
 # AI Code Review 最小版:读 diff -> 调 DeepSeek -> 输出 review.md(纯标准库,免装依赖)
 import json, os, sys, urllib.request
 
-API_KEY = os.environ["DEEPSEEK_API_KEY"]
+API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+if not API_KEY:
+    print("错误: DEEPSEEK_API_KEY 环境变量未设置")
+    sys.exit(1)
 PR_TITLE = os.environ.get("PR_TITLE", "")
 PR_URL = os.environ.get("PR_URL", "")
 
