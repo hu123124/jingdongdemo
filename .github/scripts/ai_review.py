@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # AI Code Review 最小版:读 diff -> 调 DeepSeek -> 输出 review.md(纯标准库,免装依赖)
-import json, os, urllib.request
+import json, os, sys, urllib.request
 
 API_KEY = os.environ["DEEPSEEK_API_KEY"]
 PR_TITLE = os.environ.get("PR_TITLE", "")
 PR_URL = os.environ.get("PR_URL", "")
+
+if not os.path.exists("/tmp/pr.diff"):
+    print("错误: /tmp/pr.diff 不存在,diff 生成步骤可能失败了")
+    sys.exit(1)
 
 diff = open("/tmp/pr.diff", encoding="utf-8", errors="replace").read()
 if len(diff) > 30000:          # 控 token 成本,超大 diff 截断
@@ -34,8 +38,12 @@ req = urllib.request.Request(
     data=json.dumps(payload).encode("utf-8"),
     headers={"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"},
 )
-resp = json.load(urllib.request.urlopen(req, timeout=120))
-text = resp["choices"][0]["message"]["content"]
+try:
+    resp = json.load(urllib.request.urlopen(req, timeout=120))
+    text = resp["choices"][0]["message"]["content"]
+except Exception as e:
+    print(f"AI review 调用失败: {e}")
+    sys.exit(1)
 with open("/tmp/review.md", "w", encoding="utf-8") as f:
     f.write(text)
 print(f"review 已生成:{len(text)} 字")

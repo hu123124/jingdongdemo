@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
@@ -21,13 +22,15 @@ class CartServiceTest {
 
     @Test
     void updateQuantity_负数量_应抛异常且不落库() {
-        assertThrows(RuntimeException.class, () -> cartService.updateQuantity(1L, -1));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> cartService.updateQuantity(1L, -1));
+        assertEquals("商品数量不合法", ex.getMessage());
         verify(cartMapper, never()).updateQuantityWithId(anyLong(), any());
     }
 
     @Test
     void updateQuantity_null_应抛异常() {
-        assertThrows(RuntimeException.class, () -> cartService.updateQuantity(1L, null));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> cartService.updateQuantity(1L, null));
+        assertEquals("商品数量不合法", ex.getMessage());
     }
 
     @Test
