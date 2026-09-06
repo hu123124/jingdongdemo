@@ -62,3 +62,4 @@ src/main/java/com/example/jingdongdemo
 ├── task/         # 定时任务（超时关单）
 └── listener/     # 事件监听（下单异步解耦、商品变更同步 ES）
 ```
+测试ai的codereview功能
