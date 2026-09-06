@@ -18,7 +18,7 @@ jobs:
 
       - name: 生成 diff
         run: |
-                    git fetch origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+          git fetch origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
           if ! git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > /tmp/pr.diff; then
             echo "::error::git diff 命令执行失败"
             exit 1
@@ -41,6 +41,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -s /tmp/review.md ]; then
-            gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file /tmp/review.md          else
+            gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file /tmp/review.md
+          else
             echo "未生成评论(可能 API 失败),查看上方日志"
           fi
