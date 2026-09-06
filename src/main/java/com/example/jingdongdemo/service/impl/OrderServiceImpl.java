@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import com.example.jingdongdemo.common.util.DesensitizeUtil;
 
 
 @Service
@@ -177,8 +178,7 @@ public class OrderServiceImpl implements OrderService {
 
            JSONObject address = JSONUtil.parseObj(order.getAddressSnapshot());
            VO.setConsignee(address.getStr("consignee"));
-           VO.setPhone(address.getStr("phone").substring(0, 3) + "****" + address.getStr("phone").substring(7));
-
+           VO.setPhone(DesensitizeUtil.maskPhone(address.getStr("phone")));
            VO.setCreateTime(order.getCreateTime());
 
            listOLVO.add(VO);
@@ -271,7 +271,7 @@ public class OrderServiceImpl implements OrderService {
             JSONObject addr = JSONUtil.parseObj(order.getAddressSnapshot());
             vo.setConsignee(addr.getStr("consignee"));
             String phone = addr.getStr("phone");
-            vo.setPhone(phone != null ? phone.substring(0, 3) + "****" + phone.substring(7) : "");
+            vo.setPhone(DesensitizeUtil.maskPhone(phone));
             vo.setCreateTime(order.getCreateTime());
             voList.add(vo);
         }

@@ -4,6 +4,8 @@ import com.example.jingdongdemo.common.R;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import java.util.stream.Collectors;
 
 /**
  * 全局异常处理器 — 把所有异常转成统一 R 格式返回
@@ -24,5 +26,13 @@ public class GlobalExceptionHandler {
     public R<Void> handleException(Exception e) {
         log.error("未知异常", e);
         return R.error(500, "服务器内部未知错误");
+    }
+    /** 参数校验失败 — 返回具体哪个字段错了 */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public R<Void> handleValid(MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getDefaultMessage())
+                .collect(Collectors.joining("；"));
+        return R.error(400, msg);
     }
 }

@@ -8,6 +8,7 @@ import com.example.jingdongdemo.service.AddressService;
 import com.example.jingdongdemo.service.AuthService;
 import com.example.jingdongdemo.vo.AddressVO;
 import com.example.jingdongdemo.vo.LoginResultVO;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -33,12 +34,12 @@ public class AddressController {
         return R.ok(addressService.getAddressDetail(id));
     }
     @PostMapping
-    public R<Void> addAddress(@RequestBody AddressRequest addressRequest){
+    public R<Void> addAddress(@Valid @RequestBody AddressRequest addressRequest){
         addressService.buildAddress(addressRequest);
         return R.ok();
     }
     @PutMapping("/{id}")
-    public R<Void> updateAddress(@PathVariable Long id, @RequestBody AddressRequest addressRequest){
+    public R<Void> updateAddress(@PathVariable Long id, @Valid @RequestBody AddressRequest addressRequest){
         addressService.alterAddress(addressRequest,id);
         return R.ok();
     }

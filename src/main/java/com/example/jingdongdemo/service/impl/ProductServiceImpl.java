@@ -16,6 +16,8 @@ import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,7 @@ public class ProductServiceImpl implements ProductService {
     private final RBloomFilter<Long> bloomFilter;
     /** 空值缓存标记：区分"缓存里存了空"和"缓存里没有" */
     private static final String EMPTY_CACHE = "__EMPTY__";
+    private final RedissonClient redissonClient;
 
     @Override
     public PageResultVO<ProductVO> listProduct(ProductPageRequest productPageRequest) {
@@ -86,20 +89,20 @@ public class ProductServiceImpl implements ProductService {
          * 防击穿
          */
         String rebuildLockKey = "lock:rebuild:" + cacheKey;
-        //尝试添加该查询业务的锁
-        Boolean gotLock = redisTemplate.opsForValue().setIfAbsent(rebuildLockKey,lockValue,5,TimeUnit.SECONDS);
-        //if (gotLock)防止gotLock为null导致 NullPointerException
-        if(Boolean.TRUE.equals(gotLock)){//成功获取锁
+// 尝试获取重建锁（Redisson：不传 leaseTime 走看门狗；拿不到立即跳过，走下面的自旋）
+        RLock lock = redissonClient.getLock(rebuildLockKey);
+        boolean gotLock;
+        try {
+            gotLock = lock.tryLock(0, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            gotLock = false;
+        }
+        if (gotLock) {
             try {
-                //查询db
-              return queryAndCache(pageNum,pageSize,productPageRequest,cacheKey);
+                return queryAndCache(pageNum, pageSize, productPageRequest, cacheKey);
             } finally {
-                //查看是否为本次查询添加的锁，是就释放锁
-                String script = "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-                        "return redis.call('del', KEYS[1]) else return 0 end";
-                redisTemplate.execute(new DefaultRedisScript<>(script, Long.class),
-                        Collections.singletonList(rebuildLockKey),
-                        lockValue);
+                lock.unlock();
             }
         }
         for (int i = 0; i < 3; i++) {
@@ -133,6 +136,16 @@ public class ProductServiceImpl implements ProductService {
             }
             return (ProductSPUVO) cached;        // 命中正常数据
         }
+        RLock lock = redissonClient.getLock("lock:rebuild:detail:" + id);
+        boolean gotLock;
+        try {
+            gotLock = lock.tryLock(0, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            gotLock = false;
+        }
+        if (gotLock) {
+            try {
         // ③ 缓存没命中 → 查数据库（顺手修了你原来没判空就 getId() 的隐患）
         ProductSPUVO productSPUVO = productMapper.getProductById(id);
         if (productSPUVO == null) {
@@ -154,6 +167,17 @@ public class ProductServiceImpl implements ProductService {
         redisTemplate.opsForValue().set(cacheKey, productSPUVO, ttl, TimeUnit.SECONDS);
 
         return productSPUVO;
+            } finally {
+                lock.unlock();
+            }
+        }
+        // 没抢到锁：再读一次缓存，还没有就直查库（不写缓存，避免和持锁线程重复写）
+        Object again = redisTemplate.opsForValue().get(cacheKey);
+        if (again != null) {
+            if (EMPTY_CACHE.equals(again)) return null;
+            return (ProductSPUVO) again;
+        }
+        return productMapper.getProductById(id);   // 兜底直查，可能返回 null
     }
 
     @Override

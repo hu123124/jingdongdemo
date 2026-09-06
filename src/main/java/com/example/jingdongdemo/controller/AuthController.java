@@ -5,6 +5,7 @@ import com.example.jingdongdemo.dto.LoginRequest;
 import com.example.jingdongdemo.dto.RegisterRequest;
 import com.example.jingdongdemo.service.AuthService;
 import com.example.jingdongdemo.vo.LoginResultVO;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +19,7 @@ public class AuthController {
     AuthService authService;
 
     @PostMapping("/register")
-    public R<Map<String,String>> register(@RequestBody RegisterRequest registerRequest){
+    public R<Map<String,String>> register(@Valid @RequestBody RegisterRequest registerRequest){
         Long userId = authService.register(registerRequest);
         Map<String,String> data = new HashMap<>();
         data.put("userId",String.valueOf(userId));

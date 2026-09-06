@@ -2,14 +2,11 @@ package com.example.jingdongdemo.service.impl;
 
 
 
-import com.example.jingdongdemo.dto.LoginRequest;
 import com.example.jingdongdemo.dto.PasswordUpdateRequest;
 import com.example.jingdongdemo.dto.UpdateProfileRequest;
 import com.example.jingdongdemo.entity.User;
 import com.example.jingdongdemo.mapper.UserMapper;
-import com.example.jingdongdemo.service.AuthService;
 import com.example.jingdongdemo.service.UserService;
-import com.example.jingdongdemo.vo.LoginResultVO;
 import com.example.jingdongdemo.vo.PageResultVO;
 import com.example.jingdongdemo.vo.UserInfoVO;
 import com.github.pagehelper.PageHelper;
@@ -18,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import com.example.jingdongdemo.common.util.DesensitizeUtil;
 
 import java.util.HashMap;
 import java.util.List;
@@ -44,8 +42,7 @@ public class UserServiceImpl implements UserService {
         vo.setAvatar(user.getAvatar());
         vo.setGender(user.getGender());
         vo.setCreateTime(user.getCreateTime());
-        //substring(0,3)0开始，数3个
-        vo.setPhone(user.getPhone().substring(0,3)+"****"+user.getPhone().substring(7));
+        vo.setPhone(DesensitizeUtil.maskPhone(user.getPhone()));
         return vo;
     }
 
