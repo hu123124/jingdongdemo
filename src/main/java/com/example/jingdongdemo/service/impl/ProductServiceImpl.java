@@ -5,6 +5,7 @@ import cn.hutool.core.util.IdUtil;
 import com.example.jingdongdemo.dto.ProductPageRequest;
 import com.example.jingdongdemo.entity.Product;
 import com.example.jingdongdemo.entity.ProductSKU;
+import com.example.jingdongdemo.loader.ProductDetailLoader;
 import com.example.jingdongdemo.mapper.ProductMapper;
 import com.example.jingdongdemo.service.ProductService;
 import com.example.jingdongdemo.vo.PageResultVO;
@@ -19,17 +20,16 @@ import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.jingdongdemo.event.ProductChangedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import com.example.jingdongdemo.service.EsProductSearchService;
+import com.example.jingdongdemo.cache.MultiLevelCacheService;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,6 +54,8 @@ public class ProductServiceImpl implements ProductService {
     /** 空值缓存标记：区分"缓存里存了空"和"缓存里没有" */
     private static final String EMPTY_CACHE = "__EMPTY__";
     private final RedissonClient redissonClient;
+    private final MultiLevelCacheService multiCacheService;
+    private final ProductDetailLoader productDetailLoader;
 
     @Override
     public PageResultVO<ProductVO> listProduct(ProductPageRequest productPageRequest) {
@@ -74,110 +76,22 @@ public class ProductServiceImpl implements ProductService {
                 + productPageRequest.getSort() + ":"
                 +  (productPageRequest.getKeyword() != null ? productPageRequest.getKeyword() : "") + ":"
                 + productPageRequest.getCategoryId();
-
-        String lockValue = UUID.randomUUID().toString();   // 每个请求唯一，防止误删别人的锁
-
-        //查询缓存
-        PageResultVO<ProductVO> cached = (PageResultVO<ProductVO>) redisTemplate.opsForValue().get(cacheKey);
-        if (cached != null) {
-            //纯在缓存直接返回缓存
-            log.info("商品查询命中缓存");
-            return cached;
-        }
-        log.info("商品查询未命中缓存");
-        /**
-         * 防击穿
-         */
-        String rebuildLockKey = "lock:rebuild:" + cacheKey;
-// 尝试获取重建锁（Redisson：不传 leaseTime 走看门狗；拿不到立即跳过，走下面的自旋）
-        RLock lock = redissonClient.getLock(rebuildLockKey);
-        boolean gotLock;
-        try {
-            gotLock = lock.tryLock(0, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            gotLock = false;
-        }
-        if (gotLock) {
-            try {
-                return queryAndCache(pageNum, pageSize, productPageRequest, cacheKey);
-            } finally {
-                lock.unlock();
-            }
-        }
-        for (int i = 0; i < 3; i++) {
-            try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            cached = (PageResultVO<ProductVO>) redisTemplate.opsForValue().get(cacheKey);
-            if (cached != null) {
-                log.info("自旋第{}次命中", i + 1);
-                return cached;
-            }
-        }
-
-        // ===== 4. 降级直查 DB =====
-        log.warn("自旋 3 次未命中，降级查 DB");
-        return queryAndCache(pageNum, pageSize, productPageRequest, cacheKey);
+        // 随机 TTL（10 分钟±1 分钟）防雪崩；DB 回源、空值回填、防击穿全部交给多级缓存组件
+        long ttl = 600 + ThreadLocalRandom.current().nextInt(60);
+        return multiCacheService.get(cacheKey, ttl, () -> queryProductPage(pageNum, pageSize, productPageRequest));
     }
+
 
     @Override
     public ProductSPUVO getDetailById(Long id) {
-        /// ① 布隆过滤器前置拦截：说"不存在"就一定不存在，直接返回，不打缓存不打库
+        // ① 布隆过滤器前置拦截：说"不存在"就一定不存在，直接返回，不打缓存不打库
         if (!bloomFilter.contains(id)) {
             return null;
         }
-
         String cacheKey = "product:detail:" + id;
-
-        // ② 查缓存（空值也被缓存了，所以要区分）
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached != null) {
-            if (EMPTY_CACHE.equals(cached)) {
-                return null;                     // 命中空值标记 → 商品不存在
-            }
-            return (ProductSPUVO) cached;        // 命中正常数据
-        }
-        RLock lock = redissonClient.getLock("lock:rebuild:detail:" + id);
-        boolean gotLock;
-        try {
-            gotLock = lock.tryLock(0, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            gotLock = false;
-        }
-        if (gotLock) {
-            try {
-        // ③ 缓存没命中 → 查数据库（顺手修了你原来没判空就 getId() 的隐患）
-        ProductSPUVO productSPUVO = productMapper.getProductById(id);
-        if (productSPUVO == null) {
-            // ④ 数据库也没有 → 写空值标记，TTL 短（60秒），商品真上架后能很快恢复
-            redisTemplate.opsForValue().set(cacheKey, EMPTY_CACHE, 60, TimeUnit.SECONDS);
-            return null;
-        }
-        List<ProductSKUVO> productSKUVOList =  productMapper.getProductSKUSBySPUId(productSPUVO.getId());
-        productSPUVO.setSkus(productSKUVOList);
-        // SPU 展示价 = SKU 最低价（t_product 已无 price 列）
-        if (productSKUVOList != null && !productSKUVOList.isEmpty()) {
-            productSPUVO.setPrice(productSKUVOList.stream()
-                    .map(ProductSKUVO::getPrice)
-                    .min(BigDecimal::compareTo)
-                    .orElse(null));
-        }
-        // ⑤ 写缓存：随机 TTL（5分钟±2分钟）顺带防雪崩
-        int ttl = 300 + ThreadLocalRandom.current().nextInt(120);
-        redisTemplate.opsForValue().set(cacheKey, productSPUVO, ttl, TimeUnit.SECONDS);
-
-        return productSPUVO;
-            } finally {
-                lock.unlock();
-            }
-        }
-        // 没抢到锁：再读一次缓存，还没有就直查库（不写缓存，避免和持锁线程重复写）
-        Object again = redisTemplate.opsForValue().get(cacheKey);
-        if (again != null) {
-            if (EMPTY_CACHE.equals(again)) return null;
-            return (ProductSPUVO) again;
-        }
-        return productMapper.getProductById(id);   // 兜底直查，可能返回 null
+        // 随机 TTL（5 分钟±2 分钟）防雪崩；空值回填与防击穿由多级缓存组件负责
+        long ttl = 300 + ThreadLocalRandom.current().nextInt(120);
+        return multiCacheService.get(cacheKey, ttl, () -> productDetailLoader.loadDetail(id));
     }
 
     @Override
@@ -191,8 +105,7 @@ public class ProductServiceImpl implements ProductService {
         productMapper.updateStatus(id, status);
         //先更新再删除，这里业务不涉及高并发，不考虑双删
         clearProductCache();
-        redisTemplate.delete("product:detail:" + id);   // 清理详细id缓存
-        // 通知 ES 同步：上架→写文档，下架→syncOne 内部会删文档
+        multiCacheService.evict("product:detail:" + id);   // L1+L2 双删详情缓存        // 通知 ES 同步：上架→写文档，下架→syncOne 内部会删文档
         eventPublisher.publishEvent(new ProductChangedEvent(id));
     }
 
@@ -226,8 +139,7 @@ public class ProductServiceImpl implements ProductService {
         saveSkus(id, (List<Map<String, Object>>) body.get("skus"));
         //清理缓存
         clearProductCache();
-        redisTemplate.delete("product:detail:" + id);
-
+        multiCacheService.evict("product:detail:" + id);
         bloomFilter.add(id);   // 商品存在 → 种进布隆过滤器
 
         // 通知 ES 同步（改名/改副标题/改 SKU 价格都会反映到文档）
@@ -299,20 +211,16 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * B端 - 删除商品列表缓存（商品增/改/上下架后调用，防止读到旧数据）
+     * 多级缓存：本地 L1 + Redis L2 一起按前缀清
      */
     private void clearProductCache() {
-        Set<String> keys = redisTemplate.keys("products:list:*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
+        multiCacheService.evictByPrefix("products:list:");
     }
 
-    private PageResultVO<ProductVO> queryAndCache(int pageNum, int pageSize, ProductPageRequest productPageRequest, String cacheKey) {
-
-
+    /** DB 回源：分页查询商品列表（多级缓存未命中时由组件调用） */
+    private PageResultVO<ProductVO> queryProductPage(int pageNum, int pageSize, ProductPageRequest productPageRequest) {
         PageHelper.startPage(pageNum, pageSize);
         List<Product> list = productMapper.listProducts(productPageRequest);
-
         List<ProductVO> voList = BeanUtil.copyToList(list, ProductVO.class);
         PageInfo<Product> pageInfo = new PageInfo<>(list);
 
@@ -322,15 +230,6 @@ public class ProductServiceImpl implements ProductService {
         result.setPages(pageInfo.getPages());
         result.setPageNum(pageNum);
         result.setPageSize(pageSize);
-
-// 穿透：空数据短 TTL；正常数据随机 TTL 防雪崩
-        if (list.isEmpty()) {
-            //比正常ttl短是为了防止产生太多空缓存占用太多redis内存
-            redisTemplate.opsForValue().set(cacheKey, result, 1, TimeUnit.MINUTES);
-        } else {
-            int ttl = 600 + ThreadLocalRandom.current().nextInt(60);
-            redisTemplate.opsForValue().set(cacheKey, result, ttl, TimeUnit.SECONDS);
-        }
         return result;
     }
 }

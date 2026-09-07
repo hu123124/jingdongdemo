@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>智能客服测试</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; margin: 40px; }
+        #log { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 10px; margin-bottom: 10px; }
+        .sys { color: gray; } .human { color: #c0392b; font-weight: bold; } .bot { color: green; } .sent { color: blue; }
+    </style>
+</head>
+<body>
+<h3>智能客服测试</h3>
+<div id="log"></div>
+<input id="msg" style="width:300px" placeholder="输入消息回车发送"/>
+<button onclick="send()">发送</button>
+
+<script>
+    const logBox = document.getElementById('log');
+    function append(cls, text) {
+        const div = document.createElement('div');
+        div.className = cls;
+        div.textContent = text;
+        logBox.appendChild(div);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+    // 身份与连接地址：可从 URL 参数指定
+    //   本地:    chat-test.html?userId=1001
+    //   服务器:  chat-test.html?ws=wss://jdemotoc.devbug.icu/ws&userId=1001
+    const urlParams = new URLSearchParams(location.search);
+    const userId = urlParams.get('userId') || ('user' + Math.floor(Math.random() * 1000));
+    const WS_URL = urlParams.get('ws') || 'ws://localhost:8090/ws';
+    document.title = '智能客服测试 - ' + userId;
+
+    const ws = new WebSocket(WS_URL + '?userId=' + userId);
+    ws.onopen = () => append('sys', '[' + userId + '] 连接已建立 → ' + WS_URL);
+    ws.onmessage = (e) => {
+        try {
+            const obj = JSON.parse(e.data);
+            const tag = obj.type === 'human_reply' ? '[人工客服]'
+                : (obj.type === 'notice' ? '[通知]'
+                : (obj.type === 'welcome' ? '[欢迎]' : '[机器人]'));
+            const cls = obj.type === 'human_reply' ? 'human'
+                : (obj.type === 'notice' ? 'sys' : 'bot');
+            append(cls, tag + ' ' + (obj.content || e.data));
+        } catch (err) {
+            append('sys', '[收到] ' + e.data);
+        }
+    };
+    ws.onclose = () => append('sys', '[连接已关闭]');
+    ws.onerror = () => append('sys', '[连接错误]');
+
+    function send() {
+        const input = document.getElementById('msg');
+        const text = input.value.trim();
+        if (text && ws.readyState === WebSocket.OPEN) {
+            append('sent', '[我] ' + text);
+            ws.send(JSON.stringify({ type: 'chat', content: text }));
+            input.value = '';
+        }
+    }
+    document.getElementById('msg').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+</script>
+</body>
+</html>
