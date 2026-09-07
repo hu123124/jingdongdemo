@@ -52,6 +52,8 @@ jobs:
               - 'deploy/Dockerfile'
             compose:
               - 'deploy/docker-compose.yml'
+            nginx:
+              - 'deploy/nginx.conf'
 
       # ================= 后端：编译（改了后端才编译） =================
       - name: 安装 JDK 17
@@ -131,6 +133,28 @@ jobs:
           source: "deploy/docker-compose.yml"
           target: "${{ secrets.DEPLOY_DIR }}"
           strip_components: 1
+
+      # ============ nginx 配置：改了才上传，校验通过后热加载 ============
+      - name: 上传 nginx.conf
+        if: steps.changes.outputs.nginx == 'true' || github.event_name == 'workflow_dispatch'
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          source: "deploy/nginx.conf"
+          target: "/usr/local/nginx/conf"
+          strip_components: 1
+
+      - name: 校验并热加载 nginx
+        if: steps.changes.outputs.nginx == 'true' || github.event_name == 'workflow_dispatch'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          script: |
+            /usr/local/nginx/sbin/nginx -t && /usr/local/nginx/sbin/nginx -s reload
 
       # 重建容器：改了后端 或 改了 compose 才重建（前端改动不重建，省时间）
       - name: 重建后端容器
