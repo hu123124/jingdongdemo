@@ -53,7 +53,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
             }
             ctx.channel().attr(ATTR_USER_ID).set(userId);
             chatSessionService.register(userId, ctx.channel());
-            send(ctx, "welcome", "欢迎咨询京东商城智能客服！可咨询物流/退货/优惠券/密码问题，或输入「转人工」联系人工客服。");
+            send(ctx, "welcome", "欢迎咨询 JDemo 智能客服！可咨询物流/退货/优惠券/密码问题，或输入「转人工」联系人工客服。");
             return;
         }
         super.userEventTriggered(ctx, evt);

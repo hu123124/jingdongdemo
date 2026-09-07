@@ -52,7 +52,7 @@
         var panel = document.createElement('div');
         panel.id = 'kefu-panel';
         panel.innerHTML =
-            '<div id="kefu-head"><span>京东商城 · 智能客服</span><button id="kefu-close">&times;</button></div>' +
+            '<div id="kefu-head"><span>JDemo · 智能客服</span><button id="kefu-close">&times;</button></div>' +
             '<div id="kefu-msgs"></div>' +
             '<div id="kefu-foot"><input id="kefu-input" placeholder="请输入您的问题…"/><button id="kefu-send">发送</button></div>';
         document.body.appendChild(btn);

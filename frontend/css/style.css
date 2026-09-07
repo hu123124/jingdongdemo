@@ -8,7 +8,7 @@
 
 /* 搜索结果高亮（ES highlight 返回的 <em>） */
 .name em, .subtitle em {
-    color: #e4393c;      /* 京东红 */
+    color: #e4393c;      /* 品牌红 */
     font-style: normal;  /* 去掉 <em> 默认斜体 */
     font-weight: bold;
 }

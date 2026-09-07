@@ -74,7 +74,7 @@ jobs:
         run: |
           VER=$(git rev-parse --short HEAD)
           echo "本次版本号: ${VER}"
-          sed -i "s|src=\"\.\./js/common\.js\"|src=\"../js/common.js?v=${VER}\"|g" \
+          sed -i -E "s#(src=\"\.\./js/[^\"]+\.js)\"#\1?v=${VER}\"#g; s#(href=\"\.\./css/[^\"]+\.css)\"#\1?v=${VER}\"#g" \
             frontend/customer/*.html frontend/admin/*.html
 
       - name: 同步前端 C端 → customer
