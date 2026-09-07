@@ -4,6 +4,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.example.jingdongdemo.chat.ChatBotService;
 import com.example.jingdongdemo.chat.ChatSessionService;
+import com.example.jingdongdemo.common.JwtUtils;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -21,7 +22,7 @@ import java.util.List;
 
 /**
  * 客服业务 Handler：
- * 握手完成 → 解析 ?userId=xxx 并登记会话；
+ * 握手完成 → 鉴权（URL 带 C 端 JWT 则校验，无效拒连；无 token 视为游客）→ 登记会话；
  * 聊天消息 → 已转人工则进客服队列，否则机器人 FAQ 回答，命中"转人工"则切换人工模式。
  */
 @Slf4j
@@ -34,6 +35,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
 
     private final ChatBotService chatBotService;
     private final ChatSessionService chatSessionService;
+    private final JwtUtils jwtUtils;
 
     /** WebSocket 握手完成（此时才能拿到带 query 的 URI） */
     @Override
@@ -44,13 +46,14 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
             return;
         }
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete handshake) {
-            String userId = parseUserId(handshake.requestUri());
+            String userId = resolveIdentity(handshake.requestUri(), ctx);
             if (userId == null) {
-                userId = "guest-" + ctx.channel().id().asShortText();   // 没带 userId 就给个临时身份
+                ctx.close();   // 带了 token 但校验不通过：拒绝连接，防止冒充登录用户
+                return;
             }
             ctx.channel().attr(ATTR_USER_ID).set(userId);
             chatSessionService.register(userId, ctx.channel());
-            send(ctx, "welcome", "您好 " + userId + "！我是智能客服，可咨询物流/退货/优惠券/密码问题，或输入「转人工」联系人工客服。");
+            send(ctx, "welcome", "欢迎咨询京东商城智能客服！可咨询物流/退货/优惠券/密码问题，或输入「转人工」联系人工客服。");
             return;
         }
         super.userEventTriggered(ctx, evt);
@@ -110,10 +113,31 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
         ctx.close();
     }
 
-    /** 从握手 URI（/ws?userId=1001）解析 userId */
-    private String parseUserId(String uri) {
+    /**
+     * 连接身份解析（WebSocket 鉴权）：
+     * 1) URL 带 token（C 端 JWT）→ 校验通过以 u{userId} 为身份；token 无效 → 返回 null（调用方拒绝连接）
+     * 2) 未带 token → 游客：优先用 ?userId= 参数（便于测试模拟多用户），否则随机 guest-xxx
+     */
+    private String resolveIdentity(String uri, ChannelHandlerContext ctx) {
+        String token = parseQueryParam(uri, "token");
+        if (token != null && !token.isEmpty()) {
+            Long uid = jwtUtils.getUserId(token);
+            if (uid == null) {
+                log.warn("WebSocket 握手 token 无效, 拒绝连接: {}", ctx.channel().remoteAddress());
+                return null;
+            }
+            return "u" + uid;
+        }
+        String userId = parseQueryParam(uri, "userId");
+        return (userId == null || userId.isEmpty())
+                ? "guest-" + ctx.channel().id().asShortText()
+                : userId;
+    }
+
+    /** 从握手 URI（/ws?a=1&b=2）解析指定 query 参数 */
+    private String parseQueryParam(String uri, String name) {
         try {
-            List<String> values = new QueryStringDecoder(uri).parameters().get("userId");
+            List<String> values = new QueryStringDecoder(uri).parameters().get(name);
             return (values == null || values.isEmpty()) ? null : values.get(0);
         } catch (Exception e) {
             return null;

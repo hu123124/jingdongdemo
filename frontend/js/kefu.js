@@ -78,15 +78,24 @@
         return 'ws://localhost:8090/ws';                  // 本地开发：直连 Netty
     }
     var WS_URL = resolveWs();
-    var userId = localStorage.getItem('username') || ('guest-' + Math.floor(Math.random() * 1000000));
+    var token = localStorage.getItem('token');       // C 端登录后才有；未登录为游客（服务端按游客处理）
     var greeted = false;
+    var retryTimes = 0;                              // 指数退避计数
     var ws = null;
+
+    function buildConnUrl() {
+        // 登录用户带 JWT，由服务端握手时校验身份；游客不传 token
+        return token ? (WS_URL + '?token=' + encodeURIComponent(token)) : WS_URL;
+    }
 
     function connect() {
         try {
-            ws = new WebSocket(WS_URL + '?userId=' + encodeURIComponent(userId));
+            ws = new WebSocket(buildConnUrl());
         } catch (e) { return; }
-        ws.onopen = function () { addMsg('sys', '已连接智能客服'); };
+        ws.onopen = function () {
+            retryTimes = 0;                          // 连上即重置退避
+            addMsg('sys', '已连接智能客服');
+        };
         ws.onmessage = function (e) {
             var obj;
             try { obj = JSON.parse(e.data); } catch (err) { return; }
@@ -100,8 +109,14 @@
                 addMsg('bot', obj.content);
             }
         };
-        ws.onclose = function () { addMsg('sys', '连接已断开'); };
-        ws.onerror = function () { /* 等待 onclose 提示 */ };
+        ws.onclose = function () {
+            // 指数退避自动重连：2s → 4s → 8s … 封顶 30s；页面关闭即停止
+            var delay = Math.min(30000, Math.pow(2, retryTimes) * 2000);
+            retryTimes++;
+            addMsg('sys', '连接已断开，' + (delay / 1000) + ' 秒后自动重连…');
+            setTimeout(connect, delay);
+        };
+        ws.onerror = function () { /* 等 onclose 统一处理 */ };
     }
 
     function send() {
@@ -112,8 +127,7 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'chat', content: text }));
         } else {
-            addMsg('sys', '连接已断开，请稍候自动重连…');
-            setTimeout(connect, 1500);
+            addMsg('sys', '连接已断开，正在自动重连…');   // 真正的重连在 onclose 的退避逻辑里
         }
     }
 
