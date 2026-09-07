@@ -8,8 +8,10 @@ import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.netty.handler.codec.http.websocketx.PingWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.AttributeKey;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,11 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     /** WebSocket 握手完成（此时才能拿到带 query 的 URI） */
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        // 心跳探活：60s 没收到客户端数据 → 主动发 Ping，浏览器会自动回 Pong，防止空闲连接被回收
+        if (evt instanceof IdleStateEvent) {
+            ctx.writeAndFlush(new PingWebSocketFrame());
+            return;
+        }
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete handshake) {
             String userId = parseUserId(handshake.requestUri());
             if (userId == null) {
@@ -44,9 +51,9 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
             ctx.channel().attr(ATTR_USER_ID).set(userId);
             chatSessionService.register(userId, ctx.channel());
             send(ctx, "welcome", "您好 " + userId + "！我是智能客服，可咨询物流/退货/优惠券/密码问题，或输入「转人工」联系人工客服。");
-        } else {
-            super.userEventTriggered(ctx, evt);
+            return;
         }
+        super.userEventTriggered(ctx, evt);
     }
 
     @Override
@@ -92,7 +99,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     public void channelInactive(ChannelHandlerContext ctx) {
         String userId = ctx.channel().attr(ATTR_USER_ID).get();
         if (userId != null) {
-            chatSessionService.unregister(userId);
+            chatSessionService.unregister(userId, ctx.channel());  // 只注销自己这条连接，避免误删同用户其它端
         }
         log.info("客服连接断开: {}", ctx.channel().remoteAddress());
     }

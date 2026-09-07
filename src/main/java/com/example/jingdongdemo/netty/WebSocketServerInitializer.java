@@ -5,6 +5,9 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.timeout.IdleStateHandler;
+
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +31,7 @@ public class WebSocketServerInitializer extends ChannelInitializer<SocketChannel
                 .addLast(new HttpServerCodec())                       // 1. HTTP 编解码（握手请求）
                 .addLast(new HttpObjectAggregator(65536))             // 2. 聚合 HTTP 分块报文
                 .addLast(new WebSocketServerProtocolHandler(WS_PATH)) // 3. 自动完成 ws 握手 + 帧编解码
-                .addLast(chatHandler);                                // 4. 业务处理
+                .addLast(new IdleStateHandler(60, 0, 0, TimeUnit.SECONDS)) // 4. 60s 没收数据判定空闲（心跳探活用）
+                .addLast(chatHandler);                                // 5. 业务处理
     }
 }

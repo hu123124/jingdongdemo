@@ -33,25 +33,25 @@ public class NettyWebSocketServer implements ApplicationRunner, DisposableBean {
     private Channel serverChannel;
 
     @Override
-    public void run(ApplicationArguments args) {
-        // 异步启动：不阻塞 Spring 主流程；启动失败只记日志，不影响 Web 应用
-        new Thread(() -> {
-            try {
-                bossGroup = new NioEventLoopGroup(1);       // 1 个线程负责 accept
-                workerGroup = new NioEventLoopGroup();      // 默认 CPU 核数*2，处理 IO
-                ServerBootstrap bootstrap = new ServerBootstrap();
-                bootstrap.group(bossGroup, workerGroup)
-                        .channel(NioServerSocketChannel.class)
-                        .option(ChannelOption.SO_BACKLOG, 128)          // 连接等待队列
-                        .childOption(ChannelOption.SO_KEEPALIVE, true)  // TCP 保活
-                        .childHandler(serverInitializer);               // 每个新连接套用同一条 pipeline
-                serverChannel = bootstrap.bind(port).sync().channel();
-                log.info("Netty WebSocket 客服服务端已启动: ws://localhost:{}{}", port, WebSocketServerInitializer.WS_PATH);
-                serverChannel.closeFuture().sync();  // 阻塞，让服务持续运行
-            } catch (Exception e) {
-                log.error("Netty WebSocket 服务端启动失败", e);
-            }
-        }, "netty-ws-server").start();
+    public void run(ApplicationArguments args) throws Exception {
+        bossGroup = new NioEventLoopGroup(1);       // 1 个线程负责 accept
+        workerGroup = new NioEventLoopGroup();      // 默认 CPU 核数*2，处理 IO
+        try {
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            bootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .option(ChannelOption.SO_BACKLOG, 128)          // 连接等待队列
+                    .childOption(ChannelOption.SO_KEEPALIVE, true)  // TCP 保活
+                    .childHandler(serverInitializer);               // 每个新连接套用同一条 pipeline
+            serverChannel = bootstrap.bind(port).sync().channel();
+        } catch (Exception e) {
+            // 客服是核心功能：启动失败必须让应用启动失败（CICD 健康检查会告警），不能静默降级
+            log.error("Netty WebSocket 客服服务端启动失败, 端口={}", port, e);
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+            throw new IllegalStateException("Netty WebSocket 客服服务端启动失败(端口 " + port + ")", e);
+        }
+        log.info("Netty WebSocket 客服服务端已启动: ws://localhost:{}{}", port, WebSocketServerInitializer.WS_PATH);
     }
 
     @Override

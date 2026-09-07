@@ -27,18 +27,28 @@ public class ChatSessionService {
     private final java.util.Set<String> humanMode = ConcurrentHashMap.newKeySet();
     private final Map<String, List<String>> pending = new ConcurrentHashMap<>();
 
-    /** 握手完成时登记：userId → channel */
+    /**
+     * 握手完成时登记：userId → 最新一条连接（客服回复推送到它）。
+     * 同一用户多端连接时 map 只保留最新 channel；旧连接断开走 remove(key, value)，不会误删新连接。
+     */
     public void register(String userId, Channel channel) {
         userChannels.put(userId, channel);
         log.info("会话登记: userId={}", userId);
     }
 
-    /** 连接断开时清理 */
-    public void unregister(String userId) {
-        userChannels.remove(userId);
-        humanMode.remove(userId);
-        pending.remove(userId);
-        log.info("会话清理: userId={}", userId);
+    /**
+     * 连接断开时清理：只注销传入的这条连接。
+     * ConcurrentHashMap.remove(key, value) 仅在 value 等于当前值时删除——
+     * 同一用户多端连接时，先断开的旧连接不会误删后登录的新连接；
+     * 仅当该用户已无任何在线连接时，才一并清掉人工模式与待办队列。
+     */
+    public void unregister(String userId, Channel channel) {
+        userChannels.remove(userId, channel);
+        if (!userChannels.containsKey(userId)) {
+            humanMode.remove(userId);
+            pending.remove(userId);
+        }
+        log.info("会话注销一条连接: userId={}, 仍有在线连接={}", userId, userChannels.containsKey(userId));
     }
 
     public boolean isHumanMode(String userId) {
@@ -69,8 +79,16 @@ public class ChatSessionService {
             List<String> msgs = pending.get(userId);
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("userId", userId);
-            m.put("lastMessage", msgs == null || msgs.isEmpty() ? "" : msgs.get(msgs.size() - 1));
-            m.put("waitingCount", msgs == null ? 0 : msgs.size());
+            if (msgs == null) {
+                m.put("lastMessage", "");
+                m.put("waitingCount", 0);
+            } else {
+                // pending 是 synchronizedList：读与写必须用同一把锁，避免并发修改异常
+                synchronized (msgs) {
+                    m.put("lastMessage", msgs.isEmpty() ? "" : msgs.get(msgs.size() - 1));
+                    m.put("waitingCount", msgs.size());
+                }
+            }
             result.add(m);
         }
         return result;
