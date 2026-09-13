@@ -23,6 +23,8 @@ services:
     environment:
       - SPRING_DATASOURCE_PASSWORD=1234
       - SPRING_DATA_REDIS_PASSWORD=redis123456
+      - # ===== JWT 密钥（必须由 GitHub Secrets 注入，未配置则拒绝部署）=====
+      - JWT_SECRET=${JWT_SECRET:?未配置 JWT_SECRET}
       # ===== MinIO（对象存储，图片存 B 台服务器）=====
       - MINIO_ENDPOINT=https://img.devbug.icu
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:?未配置 MINIO_ACCESS_KEY}

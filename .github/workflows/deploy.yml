@@ -12,7 +12,7 @@
 #
 # 需要的 GitHub Secrets（仓库 Settings → Secrets and variables → Actions）：
 #   SSH_HOST / SSH_USER / SSH_PASS / DEPLOY_DIR
-#   MINIO_ACCESS_KEY / MINIO_SECRET_KEY（docker-compose 部署时注入）
+#   MINIO_ACCESS_KEY / MINIO_SECRET_KEY / JWT_SECRET（docker-compose 部署时注入）
 # ============================================================
 name: Deploy JDemo
 
@@ -168,6 +168,7 @@ jobs:
             cd "${{ secrets.DEPLOY_DIR }}"
             export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY }}"
             export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY }}"
+            export JWT_SECRET="${{ secrets.JWT_SECRET }}"
             docker compose up -d --build
 
       # 健康检查：每次必跑（1 秒），确认网站与备案号正常
