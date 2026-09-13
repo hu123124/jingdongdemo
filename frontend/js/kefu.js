@@ -112,8 +112,18 @@
                     addMsg('bot', obj.content);
                 }
             };
-            ws.onclose = function () {
-                // 指数退避自动重连：2s → 4s → 8s … 封顶 30s；页面关闭即停止
+            ws.onclose = function (e) {
+                // 4001 = 服务端明确告知"鉴权失败"（token 失效）。重试永远不会成功，
+                // 所以清掉失效 token，改用游客身份重连，而不是无限重试
+                if (e.code === 4001) {
+                    addMsg('sys', '登录已过期，已切换为游客咨询。重新登录后可继续使用账号身份。');
+                    localStorage.removeItem('token');
+                    token = null;
+                    retryTimes = 0;
+                    setTimeout(connect, 500);
+                    return;
+                }
+                // 其他断开（网络抖动等）：保持原来的指数退避重连
                 var delay = Math.min(30000, Math.pow(2, retryTimes) * 2000);
                 retryTimes++;
                 addMsg('sys', '连接已断开，' + (delay / 1000) + ' 秒后自动重连…');

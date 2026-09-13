@@ -5,10 +5,12 @@ import cn.hutool.json.JSONUtil;
 import com.example.jingdongdemo.chat.ChatBotService;
 import com.example.jingdongdemo.chat.ChatSessionService;
 import com.example.jingdongdemo.common.JwtUtils;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.PingWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
@@ -48,7 +50,10 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete handshake) {
             String userId = resolveIdentity(handshake.requestUri(), ctx);
             if (userId == null) {
-                ctx.close();   // 带了 token 但校验不通过：拒绝连接，防止冒充登录用户
+                // 4001 = 自定义关闭码，专门表示"鉴权失败"，
+                // 让前端能把它和"网络抖动"区分开（否则前端会对着一个永远不会成功的请求无限重连）
+                ctx.writeAndFlush(new CloseWebSocketFrame(4001, "token invalid"))
+                        .addListener(ChannelFutureListener.CLOSE);
                 return;
             }
             ctx.channel().attr(ATTR_USER_ID).set(userId);
@@ -116,7 +121,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     /**
      * 连接身份解析（WebSocket 鉴权）：
      * 1) URL 带 token（C 端 JWT）→ 校验通过以 u{userId} 为身份；token 无效 → 返回 null（调用方拒绝连接）
-     * 2) 未带 token → 游客：优先用 ?userId= 参数（便于测试模拟多用户），否则随机 guest-xxx
+     *
      */
     private String resolveIdentity(String uri, ChannelHandlerContext ctx) {
         String token = parseQueryParam(uri, "token");
@@ -128,10 +133,8 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
             }
             return "u" + uid;
         }
-        String userId = parseQueryParam(uri, "userId");
-        return (userId == null || userId.isEmpty())
-                ? "guest-" + ctx.channel().id().asShortText()
-                : userId;
+        // 游客：身份只能由服务端生成，绝不接受客户端传入的任何 userId
+        return "guest-" + ctx.channel().id().asShortText();
     }
 
     /** 从握手 URI（/ws?a=1&b=2）解析指定 query 参数 */
